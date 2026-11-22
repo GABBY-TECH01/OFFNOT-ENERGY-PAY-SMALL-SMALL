@@ -1,0 +1,8 @@
+{
+  "name": "OFFNOT ENERGY",
+  "description": "CLEAN ENERGY, STRONGER TOMORROW. Complete solar energy e-commerce platform with up to 5-month instalment plans, individual solar components, and professional installation in Nigeria.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

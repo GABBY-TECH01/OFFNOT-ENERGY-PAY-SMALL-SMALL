@@ -1,0 +1,352 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered customer profile stored in Firestore",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "defaultAddress": { "type": "string", "maxLength": 300 },
+        "defaultCity": { "type": "string", "maxLength": 100 },
+        "defaultState": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "email", "createdAt", "updatedAt"]
+    },
+    "SavedAddress": {
+      "title": "SavedAddress",
+      "description": "Customer saved delivery and installation address",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "label": { "type": "string", "maxLength": 60 },
+        "recipientName": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "streetAddress": { "type": "string", "maxLength": 300 },
+        "city": { "type": "string", "maxLength": 100 },
+        "state": { "type": "string", "maxLength": 80 },
+        "landmark": { "type": "string", "maxLength": 160 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "isDefault": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "label", "recipientName", "phone", "streetAddress", "city", "state", "createdAt"]
+    },
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "Authorized OFFNOT ENERGY staff member with role assignment",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["super_admin", "ceo", "managing_director", "manager", "sales_rep", "sales_staff", "accounts_staff"] },
+        "branch": { "type": "string", "maxLength": 60 },
+        "active": { "type": "boolean" },
+        "addedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "active", "createdAt", "updatedAt"]
+    },
+    "RolePermission": {
+      "title": "RolePermission",
+      "description": "Granular permissions controlled by Super Administrator per staff role",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["super_admin", "ceo", "managing_director", "manager", "sales_rep", "sales_staff", "accounts_staff"] },
+        "canManageProducts": { "type": "boolean" },
+        "canManagePackages": { "type": "boolean" },
+        "canApproveInstalments": { "type": "boolean" },
+        "canVerifyPayments": { "type": "boolean" },
+        "canScheduleDelivery": { "type": "boolean" },
+        "canOverrideDeliveryLock": { "type": "boolean" },
+        "canManageStaff": { "type": "boolean" },
+        "canEditSettings": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["role", "canManageProducts", "canManagePackages", "canApproveInstalments", "canVerifyPayments", "canScheduleDelivery", "canOverrideDeliveryLock", "canManageStaff", "canEditSettings", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Individual solar hardware product for full-payment e-commerce purchase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "model": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "enum": ["Hybrid Inverters", "Lithium Batteries", "Tubular Batteries", "Solar Panels", "Solar Generators", "Portable Power Stations", "Solar Cables", "Surge Protection Devices", "Solar Accessories"] },
+        "description": { "type": "string", "maxLength": 2000 },
+        "specs": { "type": "string", "maxLength": 2000 },
+        "priceNgn": { "type": "number" },
+        "stock": { "type": "number" },
+        "lowStockThreshold": { "type": "number" },
+        "imageUrl": { "type": "string", "maxLength": 300000 },
+        "warranty": { "type": "string", "maxLength": 200 },
+        "isBestSeller": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "isDemo": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "model", "category", "description", "specs", "priceNgn", "stock", "isPublished", "createdAt", "updatedAt"]
+    },
+    "SolarPackage": {
+      "title": "SolarPackage",
+      "description": "Complete solar energy package eligible for full payment or 2-5 month instalment plans",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "capacityKva": { "type": "string", "maxLength": 60 },
+        "inverterCapacity": { "type": "string", "maxLength": 120 },
+        "batteryCapacity": { "type": "string", "maxLength": 120 },
+        "batteryTechnology": { "type": "string", "maxLength": 120 },
+        "panelQuantity": { "type": "number" },
+        "panelWattage": { "type": "string", "maxLength": 100 },
+        "accessoriesIncluded": { "type": "string", "maxLength": 1000 },
+        "installationDetails": { "type": "string", "maxLength": 1000 },
+        "warrantyInfo": { "type": "string", "maxLength": 500 },
+        "description": { "type": "string", "maxLength": 2500 },
+        "priceNgn": { "type": "number" },
+        "imageUrl": { "type": "string", "maxLength": 300000 },
+        "allowedDurations": { "type": "array" },
+        "initialDepositPercent": { "type": "number" },
+        "adminChargePercent": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "isDemo": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "capacityKva", "inverterCapacity", "batteryCapacity", "batteryTechnology", "panelQuantity", "panelWattage", "accessoriesIncluded", "installationDetails", "warrantyInfo", "description", "priceNgn", "allowedDurations", "isPublished", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer product order or solar package instalment order with strict pay-before-delivery enforcement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 40 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 120 },
+        "customerEmail": { "type": "string", "maxLength": 160 },
+        "customerPhone": { "type": "string", "maxLength": 32 },
+        "orderType": { "type": "string", "enum": ["product_order", "package_order"] },
+        "items": { "type": "array" },
+        "packageId": { "type": "string", "maxLength": 128 },
+        "packageName": { "type": "string", "maxLength": 160 },
+        "subtotalNgn": { "type": "number" },
+        "deliveryFeeNgn": { "type": "number" },
+        "installationFeeNgn": { "type": "number" },
+        "adminChargeNgn": { "type": "number" },
+        "totalAmountNgn": { "type": "number" },
+        "amountPaidNgn": { "type": "number" },
+        "outstandingBalanceNgn": { "type": "number" },
+        "paymentPlan": { "type": "string", "enum": ["full", "instalment"] },
+        "durationMonths": { "type": "number" },
+        "monthlyInstalmentNgn": { "type": "number" },
+        "initialDepositNgn": { "type": "number" },
+        "approvalStatus": { "type": "string", "enum": ["NOT_REQUIRED", "PENDING_APPROVAL", "APPROVED", "REJECTED"] },
+        "approvalNotes": { "type": "string", "maxLength": 500 },
+        "approvedBy": { "type": "string", "maxLength": 160 },
+        "paymentStatus": { "type": "string", "enum": ["UNPAID", "AWAITING_VERIFICATION", "PARTIALLY_PAID", "FULLY_PAID"] },
+        "orderStatus": { "type": "string", "enum": ["PENDING_APPROVAL", "AWAITING_PAYMENT", "IN_INSTALMENT", "FULLY_PAID_AWAITING_DELIVERY", "SCHEDULED_FOR_INSTALLATION", "COMPLETED", "CANCELLED", "REJECTED"] },
+        "deliveryAuthorized": { "type": "boolean" },
+        "deliveryAddress": { "type": "string", "maxLength": 350 },
+        "deliveryState": { "type": "string", "maxLength": 80 },
+        "deliveryBranch": { "type": "string", "maxLength": 80 },
+        "deliveryScheduledDate": { "type": "string", "maxLength": 40 },
+        "installationScheduledDate": { "type": "string", "maxLength": 40 },
+        "completedAt": { "type": "string", "maxLength": 40 },
+        "nextPaymentDueDate": { "type": "string", "maxLength": 40 },
+        "schedule": { "type": "array" },
+        "acceptedPolicyAt": { "type": "string", "maxLength": 50 },
+        "overrideApplied": { "type": "boolean" },
+        "overrideBy": { "type": "string", "maxLength": 160 },
+        "overrideReason": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderNumber", "userId", "customerName", "customerEmail", "customerPhone", "orderType", "subtotalNgn", "totalAmountNgn", "amountPaidNgn", "outstandingBalanceNgn", "paymentPlan", "durationMonths", "approvalStatus", "paymentStatus", "orderStatus", "deliveryAuthorized", "deliveryAddress", "acceptedPolicyAt", "createdAt", "updatedAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment transaction log and receipt record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "receiptNumber": { "type": "string", "maxLength": 50 },
+        "reference": { "type": "string", "maxLength": 120 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 40 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 120 },
+        "customerEmail": { "type": "string", "maxLength": 160 },
+        "amountNgn": { "type": "number" },
+        "method": { "type": "string", "enum": ["paystack", "flutterwave", "bank_transfer", "branch_cash"] },
+        "channel": { "type": "string", "maxLength": 60 },
+        "status": { "type": "string", "enum": ["PENDING_VERIFICATION", "VERIFIED", "FAILED"] },
+        "instalmentNumber": { "type": "number" },
+        "verifiedBy": { "type": "string", "maxLength": 160 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "receiptNumber", "reference", "orderId", "orderNumber", "userId", "customerName", "customerEmail", "amountNgn", "method", "status", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and management override audit log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 100 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "actorRole": { "type": "string", "maxLength": 60 },
+        "targetType": { "type": "string", "maxLength": 60 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "reason": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "action", "actorUid", "actorEmail", "actorRole", "targetType", "targetId", "details", "createdAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Verified customer review or testimonial moderated by management",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 120 },
+        "location": { "type": "string", "maxLength": 120 },
+        "packageOrProduct": { "type": "string", "maxLength": 160 },
+        "rating": { "type": "number" },
+        "quote": { "type": "string", "maxLength": 1000 },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "customerName", "location", "packageOrProduct", "rating", "quote", "isPublished", "createdAt"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "Customer contact or technical consultation inquiry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "branch": { "type": "string", "maxLength": 80 },
+        "serviceType": { "type": "string", "maxLength": 100 },
+        "message": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["NEW", "IN_PROGRESS", "RESOLVED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "phone", "message", "status", "createdAt"]
+    },
+    "NotificationLog": {
+      "title": "NotificationLog",
+      "description": "Customer and admin notification dispatch record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "recipientEmail": { "type": "string", "maxLength": 160 },
+        "recipientPhone": { "type": "string", "maxLength": 32 },
+        "type": { "type": "string", "maxLength": 80 },
+        "title": { "type": "string", "maxLength": 160 },
+        "message": { "type": "string", "maxLength": 1500 },
+        "channel": { "type": "string", "enum": ["email", "whatsapp", "in_app"] },
+        "status": { "type": "string", "enum": ["SENT", "QUEUED", "LOGGED"] },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "type", "title", "message", "channel", "status", "createdAt"]
+    },
+    "StoreSetting": {
+      "title": "StoreSetting",
+      "description": "Dynamic instalment policy, terms, and storefront configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "allowedDurations": { "type": "array" },
+        "defaultInitialDepositPercent": { "type": "number" },
+        "defaultAdminChargePercent": { "type": "number" },
+        "gracePeriodDays": { "type": "number" },
+        "bankName": { "type": "string", "maxLength": 120 },
+        "bankAccountName": { "type": "string", "maxLength": 160 },
+        "bankAccountNumber": { "type": "string", "maxLength": 30 },
+        "instalmentTerms": { "type": "string", "maxLength": 5000 },
+        "warrantyPolicy": { "type": "string", "maxLength": 5000 },
+        "returnPolicy": { "type": "string", "maxLength": 5000 },
+        "privacyPolicy": { "type": "string", "maxLength": 5000 },
+        "termsAndConditions": { "type": "string", "maxLength": 5000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Customer profiles restricted to owner or authorized staff"
+    },
+    "/users/{userId}/addresses/{addressId}": {
+      "schema": { "$ref": "#/entities/SavedAddress" },
+      "description": "Customer saved delivery addresses"
+    },
+    "/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Staff RBAC directory managed by Super Administrator"
+    },
+    "/rolePermissions/{roleId}": {
+      "schema": { "$ref": "#/entities/RolePermission" },
+      "description": "Role permission definitions managed by Super Administrator"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Individual solar products across 9 categories"
+    },
+    "/packages/{packageId}": {
+      "schema": { "$ref": "#/entities/SolarPackage" },
+      "description": "Complete solar packages supporting full or 2-5 month instalment payment"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer product orders and solar package instalment applications"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Payment receipts and verified transaction logs"
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable audit logs for management overrides and sensitive staff actions"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Customer reviews and verified testimonials"
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "Customer inquiries and technical consultation requests"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/NotificationLog" },
+      "description": "Automated email, WhatsApp, and in-app notification logs"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/StoreSetting" },
+      "description": "Storewide instalment settings, bank details, and legal policies"
+    }
+  }
+}
