@@ -21,7 +21,7 @@ export interface BranchInfo {
 export const OFFNOT_BRANCHES: BranchInfo[] = [
   {
     id: 'dugbe',
-    name: 'OFFNOT ENERGY — Dugbe Branch',
+    name: 'OFFNOT ENERGY — Head Office (Dugbe)',
     address: 'Opposite Sweetco, Dugbe Iyaganku Road, Ibadan, Oyo State, Nigeria',
     phone: '07064159047',
     position: { lat: 7.3878, lng: 3.8794 },
@@ -29,7 +29,7 @@ export const OFFNOT_BRANCHES: BranchInfo[] = [
   },
   {
     id: 'dalute',
-    name: 'OFFNOT ENERGY — Dalute Branch',
+    name: 'OFFNOT ENERGY — Branch Office (Dalute)',
     address: 'Inside Tipper Garage, Dalute Road, Ibadan, Oyo State, Nigeria',
     phone: '08087928125',
     position: { lat: 7.3485, lng: 3.848 },
@@ -114,7 +114,7 @@ export function BranchMap() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold text-orange-600 mb-1">
-                    {branch.id === 'dugbe' ? 'Dugbe Main Office' : 'Dalute Sales & Distribution'}
+                    {branch.id === 'dugbe' ? 'Head Office · Dugbe Iyaganku Road' : 'Branch Office · Dalute Road'}
                   </p>
                   <h3 className="text-base font-bold text-slate-900 mb-1.5">{branch.name}</h3>
                 </div>

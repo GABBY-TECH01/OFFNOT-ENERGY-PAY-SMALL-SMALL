@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, MapPin, Phone } from 'lucide-react';
+import { ExternalLink, Mail, MapPin, Phone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { PageRoute } from '../types';
 
@@ -35,10 +35,39 @@ export function Footer({ currentRoute, onNavigate }: FooterProps) {
             <p className="text-xs font-medium text-amber-400 tracking-wide mb-3">
               CLEAN ENERGY, STRONGER TOMORROW.
             </p>
-            <p className="text-sm text-slate-400 leading-relaxed">
+            <p className="text-sm text-slate-400 leading-relaxed mb-4">
               Solar energy, inverter systems, batteries, accessories, wholesale &amp; retail
               distribution, and professional installation across Ibadan, Oyo State, and Nigeria.
             </p>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <a
+                href="https://www.facebook.com/offnotenergy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:border-slate-700"
+              >
+                Facebook: Offnot Energy
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <a
+                href="https://www.instagram.com/offnot.energy?gwpx=MWVpd2JoYzNkb3hpZA=="
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:border-slate-700"
+              >
+                Instagram: @offnot.energy
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <a
+                href="https://www.tiktok.com/@offnot_energy?_r=1&_t=ZS-9Bixi05FnGO"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:border-slate-700"
+              >
+                TikTok: @offnot_energy
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
 
           {/* Navigation Links */}
@@ -113,7 +142,7 @@ export function Footer({ currentRoute, onNavigate }: FooterProps) {
                 <Phone className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-white font-medium">Customer Service: 07047053453</p>
-                  <p className="text-xs">Dugbe: 07064159047 · Dalute: 08087928125</p>
+                  <p className="text-xs">Head Office (Dugbe): 07064159047 · Branch Office (Dalute): 08087928125</p>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
@@ -126,11 +155,11 @@ export function Footer({ currentRoute, onNavigate }: FooterProps) {
                 <MapPin className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
                 <div className="space-y-1.5 text-xs">
                   <p>
-                    <span className="text-white font-semibold">Dugbe Branch:</span> Opposite Sweetco,
+                    <span className="text-white font-semibold">Head Office (Dugbe):</span> Opposite Sweetco,
                     Dugbe Iyaganku Road, Ibadan, Oyo State, Nigeria.
                   </p>
                   <p>
-                    <span className="text-white font-semibold">Dalute Branch:</span> Inside Tipper
+                    <span className="text-white font-semibold">Branch Office (Dalute):</span> Inside Tipper
                     Garage, Dalute Road, Ibadan, Oyo State, Nigeria.
                   </p>
                 </div>

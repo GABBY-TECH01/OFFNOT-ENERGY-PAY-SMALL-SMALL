@@ -70,11 +70,12 @@ service cloud.firestore {
     // --- Validation Blueprints ---
     function isValidUserProfile(data) {
       return data.keys().hasAll(['uid', 'displayName', 'email', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'displayName', 'email', 'phone', 'defaultAddress', 'defaultCity', 'defaultState', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'phone', 'accountType', 'defaultAddress', 'defaultCity', 'defaultState', 'createdAt', 'updatedAt'])
         && isValidId(data.uid)
         && isValidString(data.displayName, 1, 120)
         && isValidString(data.email, 3, 160)
         && (!('phone' in data) || isValidString(data.phone, 0, 32))
+        && (!('accountType' in data) || data.accountType in ['installer', 'end_user'])
         && (!('defaultAddress' in data) || isValidString(data.defaultAddress, 0, 300))
         && (!('defaultCity' in data) || isValidString(data.defaultCity, 0, 100))
         && (!('defaultState' in data) || isValidString(data.defaultState, 0, 80))
@@ -131,7 +132,7 @@ service cloud.firestore {
 
     function isValidProduct(data) {
       return data.keys().hasAll(['id', 'name', 'model', 'category', 'description', 'specs', 'priceNgn', 'stock', 'isPublished', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'name', 'model', 'category', 'description', 'specs', 'priceNgn', 'stock', 'lowStockThreshold', 'imageUrl', 'warranty', 'isBestSeller', 'isPublished', 'isDemo', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'model', 'category', 'description', 'specs', 'priceNgn', 'installerPriceNgn', 'stock', 'lowStockThreshold', 'imageUrl', 'warranty', 'isBestSeller', 'isPublished', 'isDemo', 'createdAt', 'updatedAt'])
         && isValidId(data.id)
         && isValidString(data.name, 1, 160)
         && isValidString(data.model, 1, 100)
@@ -139,6 +140,7 @@ service cloud.firestore {
         && isValidString(data.description, 1, 2000)
         && isValidString(data.specs, 1, 2000)
         && data.priceNgn is number && data.priceNgn >= 0
+        && (!('installerPriceNgn' in data) || (data.installerPriceNgn is number && data.installerPriceNgn >= 0))
         && data.stock is number && data.stock >= 0
         && (!('lowStockThreshold' in data) || (data.lowStockThreshold is number && data.lowStockThreshold >= 0))
         && (!('imageUrl' in data) || isValidString(data.imageUrl, 0, 300000))
@@ -342,7 +344,7 @@ service cloud.firestore {
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'defaultAddress', 'defaultCity', 'defaultState', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'accountType', 'defaultAddress', 'defaultCity', 'defaultState', 'updatedAt']);
       allow delete: if isValidId(userId) && isSuperAdmin() && request.auth.uid != userId;
 
       match /addresses/{addressId} {
@@ -394,7 +396,7 @@ service cloud.firestore {
 
     // 4. Products Catalog
     match /products/{productId} {
-      allow get: if isValidId(productId) && (existing().isPublished == true || isActiveStaff());
+      allow get: if isValidId(productId) && (isActiveStaff() || (resource != null && existing().isPublished == true));
       allow list: if resource.data.isPublished == true || isActiveStaff();
       allow create: if isValidId(productId) && isSalesOrAbove()
         && isValidProduct(incoming())
@@ -417,7 +419,7 @@ service cloud.firestore {
 
     // 5. Solar Packages Catalog
     match /packages/{packageId} {
-      allow get: if isValidId(packageId) && (existing().isPublished == true || isActiveStaff());
+      allow get: if isValidId(packageId) && (isActiveStaff() || (resource != null && existing().isPublished == true));
       allow list: if resource.data.isPublished == true || isActiveStaff();
       allow create: if isValidId(packageId) && isManagerOrAbove()
         && isValidPackage(incoming())
@@ -434,7 +436,7 @@ service cloud.firestore {
 
     // 6. Orders (Strict Pay-Before-Delivery & Instalment Approval Enforced)
     match /orders/{orderId} {
-      allow get: if isValidId(orderId) && isSignedIn() && (existing().userId == request.auth.uid || isActiveStaff());
+      allow get: if isValidId(orderId) && isSignedIn() && (isActiveStaff() || (resource != null && existing().userId == request.auth.uid));
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isActiveStaff());
       allow create: if isValidId(orderId) && isSignedIn()
         && isValidOrder(incoming())
@@ -531,7 +533,7 @@ service cloud.firestore {
 
     // 7. Payments & Receipts
     match /payments/{paymentId} {
-      allow get: if isValidId(paymentId) && isSignedIn() && (existing().userId == request.auth.uid || isActiveStaff());
+      allow get: if isValidId(paymentId) && isSignedIn() && (isActiveStaff() || (resource != null && existing().userId == request.auth.uid));
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isActiveStaff());
       allow create: if isValidId(paymentId) && isSignedIn()
         && isValidPayment(incoming())
@@ -568,7 +570,7 @@ service cloud.firestore {
 
     // 9. Customer Reviews
     match /reviews/{reviewId} {
-      allow get: if isValidId(reviewId) && (existing().isPublished == true || isActiveStaff() || (isSignedIn() && existing().userId == request.auth.uid));
+      allow get: if isValidId(reviewId) && (isActiveStaff() || (resource != null && (existing().isPublished == true || (isSignedIn() && existing().userId == request.auth.uid))));
       allow list: if resource.data.isPublished == true || isActiveStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(reviewId) && isSignedIn()
         && isValidReview(incoming())
@@ -603,7 +605,7 @@ service cloud.firestore {
 
     // 11. Automated Notifications
     match /notifications/{notificationId} {
-      allow get: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isActiveStaff());
+      allow get: if isValidId(notificationId) && isSignedIn() && (isActiveStaff() || (resource != null && existing().userId == request.auth.uid));
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isActiveStaff());
       allow create: if isValidId(notificationId) && isSignedIn()
         && isValidNotificationLog(incoming())

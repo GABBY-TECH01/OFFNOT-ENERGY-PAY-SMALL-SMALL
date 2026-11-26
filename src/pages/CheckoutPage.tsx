@@ -15,7 +15,11 @@ import { useCart } from '../context/CartContext';
 import { useStore } from '../context/StoreContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import type { Order, PageRoute } from '../types';
-import { calculateInstalmentPlan, formatNgn } from '../utils/instalments';
+import {
+  calculateInstalmentPlan,
+  formatNgn,
+  getEffectiveProductPrice,
+} from '../utils/instalments';
 
 interface CheckoutPageProps {
   onNavigate: (route: PageRoute) => void;
@@ -29,7 +33,7 @@ const DELIVERY_ZONES = [
 ];
 
 export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
-  const { user, profile, savedAddresses } = useAuth();
+  const { user, profile, savedAddresses, isInstaller } = useAuth();
   const {
     items,
     subtotalNgn,
@@ -406,15 +410,18 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
         payload.schedule = pkgCalc!.schedule;
         payload.items = [];
       } else {
-        payload.items = items.map((i) => ({
-          productId: i.product.id,
-          name: i.product.name,
-          model: i.product.model,
-          category: i.product.category,
-          quantity: i.quantity,
-          unitPriceNgn: i.product.priceNgn,
-          lineTotalNgn: i.product.priceNgn * i.quantity,
-        }));
+        payload.items = items.map((i) => {
+          const unitPriceNgn = getEffectiveProductPrice(i.product, isInstaller);
+          return {
+            productId: i.product.id,
+            name: i.product.name,
+            model: i.product.model,
+            category: i.product.category,
+            quantity: i.quantity,
+            unitPriceNgn,
+            lineTotalNgn: unitPriceNgn * i.quantity,
+          };
+        });
       }
 
       await setDoc(doc(db, 'orders', orderId), payload);
@@ -760,19 +767,23 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
             ) : (
               <div className="space-y-3 text-sm">
                 <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-                  {items.map(({ product, quantity }) => (
-                    <div key={product.id} className="py-2.5 flex justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">{product.name}</p>
-                        <p className="text-xs text-slate-500 font-mono-num">
-                          Qty {quantity} × {formatNgn(product.priceNgn)}
-                        </p>
+                  {items.map(({ product, quantity }) => {
+                    const unitPrice = getEffectiveProductPrice(product, isInstaller);
+                    return (
+                      <div key={product.id} className="py-2.5 flex justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{product.name}</p>
+                          <p className="text-xs text-slate-500 font-mono-num">
+                            Qty {quantity} × {formatNgn(unitPrice)}
+                            {isInstaller ? ' (Installer)' : ''}
+                          </p>
+                        </div>
+                        <span className="font-bold font-mono-num text-slate-900">
+                          {formatNgn(unitPrice * quantity)}
+                        </span>
                       </div>
-                      <span className="font-bold font-mono-num text-slate-900">
-                        {formatNgn(product.priceNgn * quantity)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="pt-3 border-t border-slate-100 space-y-1.5">
                   <div className="flex justify-between">

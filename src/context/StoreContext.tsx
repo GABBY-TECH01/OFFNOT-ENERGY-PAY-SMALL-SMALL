@@ -19,7 +19,7 @@ import type {
   SolarPackage,
   StoreSetting,
 } from '../types';
-import { DEFAULT_STORE_SETTINGS, DEMO_PACKAGES, DEMO_PRODUCTS } from '../utils/seedData';
+import { DEFAULT_STORE_SETTINGS, DEMO_PACKAGES, OFFNOT_PRODUCTS } from '../utils/seedData';
 import { useAuth } from './AuthContext';
 
 interface StoreContextValue {
@@ -207,8 +207,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authReady, user]);
 
-  const usingDemoCatalog = firestorePackages.length === 0 || firestoreProducts.length === 0;
-  const products = firestoreProducts.length > 0 ? firestoreProducts : DEMO_PRODUCTS;
+  const hasRealProducts = firestoreProducts.some((p) => !p.isDemo);
+  const usingDemoCatalog = firestorePackages.length === 0 || (!hasRealProducts && firestoreProducts.length > 0);
+  const products = hasRealProducts
+    ? firestoreProducts
+    : firestoreProducts.length > 0
+      ? [...OFFNOT_PRODUCTS, ...firestoreProducts.filter((fp) => !OFFNOT_PRODUCTS.some((op) => op.id === fp.id))]
+      : OFFNOT_PRODUCTS;
   const packages = firestorePackages.length > 0 ? firestorePackages : DEMO_PACKAGES;
 
   async function submitInquiry(data: {

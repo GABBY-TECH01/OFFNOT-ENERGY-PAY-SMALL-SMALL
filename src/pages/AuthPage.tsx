@@ -8,10 +8,12 @@ import {
   Lock,
   Mail,
   Shield,
+  UserCheck,
   UserPlus,
+  Wrench,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { STAFF_ROLE_LABELS, type PageRoute } from '../types';
+import { STAFF_ROLE_LABELS, type AccountPricingType, type PageRoute } from '../types';
 
 interface AuthPageProps {
   onNavigate: (route: PageRoute) => void;
@@ -21,6 +23,9 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
   const {
     user,
     isStaff,
+    isInstaller,
+    accountTypeChoice,
+    setInstallerChoice,
     staffRole,
     staffRecord,
     isBootstrapEmailUnverified,
@@ -34,6 +39,12 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
     logout,
   } = useAuth();
   const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
+  const [selectedInstaller, setSelectedInstaller] = useState<boolean>(
+    accountTypeChoice === 'installer'
+  );
+  const [hasPickedInstallerOption, setHasPickedInstallerOption] = useState<boolean>(
+    accountTypeChoice !== null
+  );
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -64,6 +75,18 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
     setShowEmailEnableGuide(false);
     setShowPopupBlockedHelp(false);
   };
+
+  const handleSelectInstallerOption = (isInst: boolean) => {
+    setSelectedInstaller(isInst);
+    setHasPickedInstallerOption(true);
+    void setInstallerChoice(isInst);
+  };
+
+  const selectedAccountTypeParam: AccountPricingType | undefined = hasPickedInstallerOption
+    ? selectedInstaller
+      ? 'installer'
+      : 'end_user'
+    : undefined;
 
   if (user && isBootstrapEmailUnverified) {
     return (
@@ -99,7 +122,7 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                 setLoading(true);
                 try {
                   setPendingRedirect(true);
-                  await signInWithGoogle();
+                  await signInWithGoogle(selectedAccountTypeParam);
                 } catch (err) {
                   setPendingRedirect(false);
                   const msg = err instanceof Error ? err.message : String(err);
@@ -159,6 +182,19 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           <h1 className="text-xl font-bold text-slate-900">
             Signed in as {user.displayName || user.email}
           </h1>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-semibold">
+            {isInstaller ? (
+              <>
+                <Wrench className="w-3.5 h-3.5 text-orange-600" />
+                Pricing Tier: Installer Prices Active
+              </>
+            ) : (
+              <>
+                <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                Pricing Tier: End-User Retail Prices
+              </>
+            )}
+          </div>
           {staffLoading ? (
             <p className="text-sm text-slate-500">Checking role &amp; branch permissions...</p>
           ) : isStaff && staffRole ? (
@@ -194,6 +230,35 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
               </button>
             </>
           )}
+          <div className="pt-2 border-t border-slate-100 text-left">
+            <p className="text-xs font-semibold text-slate-700 mb-2 text-center">
+              Switch Pricing Tier (Are you an installer?)
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void setInstallerChoice(false)}
+                className={`py-2 px-3 rounded-lg border text-xs font-bold cursor-pointer ${
+                  !isInstaller
+                    ? 'border-emerald-700 bg-emerald-50 text-emerald-900'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                No (End User)
+              </button>
+              <button
+                type="button"
+                onClick={() => void setInstallerChoice(true)}
+                className={`py-2 px-3 rounded-lg border text-xs font-bold cursor-pointer ${
+                  isInstaller
+                    ? 'border-orange-600 bg-orange-50 text-orange-900'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Yes (Installer)
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => void logout()}
@@ -258,7 +323,7 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
     setLoading(true);
     try {
       setPendingRedirect(true);
-      await signInWithGoogle();
+      await signInWithGoogle(selectedAccountTypeParam);
     } catch (err) {
       setPendingRedirect(false);
       setError(formatAuthError(err));
@@ -277,10 +342,16 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
     try {
       if (mode === 'login') {
         setPendingRedirect(true);
-        await signInWithEmail(email, password);
+        await signInWithEmail(email, password, selectedAccountTypeParam);
       } else if (mode === 'register') {
         setPendingRedirect(true);
-        await registerWithEmail(name, email, password, phone);
+        await registerWithEmail(
+          name,
+          email,
+          password,
+          phone,
+          selectedInstaller ? 'installer' : 'end_user'
+        );
       } else {
         if (!email.trim()) {
           setError('Please enter your registered email address.');
@@ -303,7 +374,7 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
   return (
     <div className="max-w-md mx-auto px-4 py-14">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm">
-        <div className="text-center mb-6">
+        <div className="text-center mb-5">
           <img
             src="/assets/aistudio/IMG-20261027-WA0006_cf69d348.jpg"
             alt="OFFNOT ENERGY"
@@ -322,6 +393,47 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
               : 'Automatically routes to Customer Dashboard or your Staff Role Dashboard'}
           </p>
         </div>
+
+        {/* Installer vs End-User Question */}
+        {mode !== 'reset' && (
+          <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-slate-900">Are you an installer?</p>
+              <span className="text-[11px] font-semibold text-emerald-800">
+                {selectedInstaller ? 'Installer Prices' : 'End-User Prices'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleSelectInstallerOption(false)}
+                className={`py-2 px-3 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+                  !selectedInstaller
+                    ? 'border-emerald-700 bg-emerald-700 text-white'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                No, End User
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectInstallerOption(true)}
+                className={`py-2 px-3 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+                  selectedInstaller
+                    ? 'border-orange-600 bg-orange-600 text-white'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Yes, Installer
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-snug">
+              {selectedInstaller
+                ? 'Product prices across the store will automatically switch to OFFNOT ENERGY wholesale Installer Prices.'
+                : 'Standard End-User retail prices apply across all individual solar products.'}
+            </p>
+          </div>
+        )}
 
         {/* Google Auth (Configured automatically by Firebase) */}
         <button

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { CartItem, Product, SolarPackage } from '../types';
+import { getEffectiveProductPrice } from '../utils/instalments';
+import { useAuth } from './AuthContext';
 
 export interface PackageCheckoutSelection {
   pkg: SolarPackage;
@@ -27,6 +29,7 @@ const CART_STORAGE_KEY = 'offnot_energy_cart_v1';
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { isInstaller } = useAuth();
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const raw = localStorage.getItem(CART_STORAGE_KEY);
@@ -88,7 +91,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const itemCount = items.reduce((acc, i) => acc + i.quantity, 0);
-  const subtotalNgn = items.reduce((acc, i) => acc + i.product.priceNgn * i.quantity, 0);
+  const subtotalNgn = items.reduce(
+    (acc, i) => acc + getEffectiveProductPrice(i.product, isInstaller) * i.quantity,
+    0
+  );
 
   return (
     <CartContext.Provider

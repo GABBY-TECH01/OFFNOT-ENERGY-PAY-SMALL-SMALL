@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Mail, MessageCircle, Phone, Send } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Mail, MessageCircle, Phone, Send } from 'lucide-react';
 import { BranchMap } from '../components/BranchMap';
 import { useStore } from '../context/StoreContext';
 import { buildWhatsAppLink } from '../utils/instalments';
@@ -78,10 +78,10 @@ export function ContactPage() {
               <strong>Customer Service:</strong> 07047053453
             </li>
             <li>
-              <strong>Dugbe Branch:</strong> 07064159047
+              <strong>Head Office (Dugbe):</strong> 07064159047
             </li>
             <li>
-              <strong>Dalute Branch:</strong> 08087928125
+              <strong>Branch Office (Dalute):</strong> 08087928125
             </li>
           </ul>
         </div>
@@ -116,6 +116,43 @@ export function ContactPage() {
           >
             <MessageCircle className="w-4 h-4" />
             Open WhatsApp (07047053453)
+          </a>
+        </div>
+      </div>
+
+      {/* Official Social Media */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+        <h2 className="text-base font-bold text-slate-900 mb-1">Follow OFFNOT ENERGY Online</h2>
+        <p className="text-xs text-slate-600 mb-4">
+          Connect with our official pages for solar package updates, installations, and seasonal promotions.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <a
+            href="https://www.facebook.com/offnotenergy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 hover:border-emerald-700 hover:text-emerald-800"
+          >
+            Facebook: Offnot Energy
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <a
+            href="https://www.instagram.com/offnot.energy?gwpx=MWVpd2JoYzNkb3hpZA=="
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 hover:border-emerald-700 hover:text-emerald-800"
+          >
+            Instagram: offnot.energy
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <a
+            href="https://www.tiktok.com/@offnot_energy?_r=1&_t=ZS-9Bixi05FnGO"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 hover:border-emerald-700 hover:text-emerald-800"
+          >
+            TikTok: offnot Energy
+            <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
       </div>
@@ -176,8 +213,8 @@ export function ContactPage() {
               onChange={(e) => setBranch(e.target.value)}
               className="px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm"
             >
-              <option value="Dugbe Branch">Dugbe Branch</option>
-              <option value="Dalute Branch">Dalute Branch</option>
+              <option value="Dugbe Branch">Head Office — Dugbe Iyaganku Road</option>
+              <option value="Dalute Branch">Branch Office — Inside Tipper Garage, Dalute Road</option>
               <option value="Customer Service">General Customer Service</option>
             </select>
           </div>

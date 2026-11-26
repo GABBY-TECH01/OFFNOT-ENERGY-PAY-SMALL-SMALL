@@ -1,8 +1,15 @@
-import type { InstalmentScheduleItem } from '../types';
+import type { InstalmentScheduleItem, Product } from '../types';
 
 export function formatNgn(amount: number): string {
   const safe = Number.isFinite(amount) ? Math.round(amount) : 0;
   return `₦${safe.toLocaleString('en-NG')}`;
+}
+
+export function getEffectiveProductPrice(product: Product, isInstaller: boolean): number {
+  if (isInstaller && typeof product.installerPriceNgn === 'number' && product.installerPriceNgn > 0) {
+    return Math.round(product.installerPriceNgn);
+  }
+  return Math.round(product.priceNgn || 0);
 }
 
 export interface InstalmentCalculation {

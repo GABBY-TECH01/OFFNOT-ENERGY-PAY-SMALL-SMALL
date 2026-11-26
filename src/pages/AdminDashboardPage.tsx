@@ -68,7 +68,11 @@ import {
   type UserProfile,
 } from '../types';
 import { downloadCsv, formatNgn, formatOrderStatusLabel } from '../utils/instalments';
-import { DEFAULT_ROLE_PERMISSIONS, seedInitialCatalogIfAdmin } from '../utils/seedData';
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  seedInitialCatalogIfAdmin,
+  syncOfficialCatalogToFirestore,
+} from '../utils/seedData';
 
 interface AdminDashboardPageProps {
   onNavigate: (route: PageRoute) => void;
@@ -213,8 +217,10 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
   // Modals & Forms
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [productModalError, setProductModalError] = useState('');
   const [editingPackage, setEditingPackage] = useState<SolarPackage | null>(null);
   const [showPackageModal, setShowPackageModal] = useState(false);
+  const [packageModalError, setPackageModalError] = useState('');
 
   const [scheduleOrder, setScheduleOrder] = useState<Order | null>(null);
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -230,6 +236,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
 
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingPackage, setSavingPackage] = useState(false);
+  const [syncingCatalog, setSyncingCatalog] = useState(false);
   const [savingManualPay, setSavingManualPay] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingOverride, setSavingOverride] = useState(false);
@@ -522,13 +529,32 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         targetType: 'settings',
         targetId: 'storeConfig',
         details:
-          'Seeded initial demonstration catalog, OFFNOT 4KVA package, role permissions, and store settings.',
+          'Seeded 66-item OFFNOT ENERGY price list, OFFNOT 4KVA package, role permissions, and store settings.',
       });
-      showNotice('Demonstration catalog, settings, and role permissions seeded to Firestore.');
+      showNotice('66-item OFFNOT ENERGY catalog, packages, settings, and role permissions synced to Firestore.');
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Unable to seed catalog.');
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const handleSyncOfficialCatalog = async () => {
+    if (syncingCatalog) return;
+    setSyncingCatalog(true);
+    try {
+      const count = await syncOfficialCatalogToFirestore();
+      await writeAuditLog({
+        action: 'SYNC_OFFICIAL_PRODUCTS',
+        targetType: 'products',
+        targetId: 'offnot_catalog',
+        details: `Synced ${count} OFFNOT ENERGY official products with Installer & End-User pricing.`,
+      });
+      showNotice(`Synced ${count} OFFNOT ENERGY official products with Installer & End-User prices!`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to sync OFFNOT price list.');
+    } finally {
+      setSyncingCatalog(false);
     }
   };
 
@@ -1449,7 +1475,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 cursor-pointer"
             >
               <Database className="w-4 h-4" />
-              {seeding ? 'Seeding Firestore...' : 'Seed Demo Catalog to Firestore'}
+              {seeding ? 'Syncing Firestore...' : 'Sync OFFNOT Catalog to Firestore'}
             </button>
           )}
           <button
@@ -2049,23 +2075,26 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               <button
                 type="button"
                 onClick={() => {
+                  setPackageModalError('');
                   setEditingPackage({
                     id: `pkg_${Date.now()}`,
                     name: '',
                     capacityKva: '',
                     inverterCapacity: '',
                     batteryCapacity: '',
-                    batteryTechnology: '',
+                    batteryTechnology: 'Lithium Iron Phosphate (LiFePO4)',
                     panelQuantity: 4,
-                    panelWattage: '',
-                    accessoriesIncluded: '',
-                    installationDetails: '',
-                    warrantyInfo: '',
+                    panelWattage: '550W Monocrystalline Solar Panels',
+                    accessoriesIncluded:
+                      'DC/AC Surge Protection Devices, Breaker Box, DC & AC Solar Cables, Mounting Rails & Connectors',
+                    installationDetails:
+                      'Professional site assessment, rooftop mounting, inverter/battery commissioning, and load testing after 100% full payment.',
+                    warrantyInfo: 'Official OFFNOT ENERGY & Manufacturer Warranty',
                     description: '',
                     priceNgn: 0,
                     allowedDurations: [1, 2, 3, 4, 5],
-                    initialDepositPercent: storeSettings.defaultInitialDepositPercent,
-                    adminChargePercent: storeSettings.defaultAdminChargePercent,
+                    initialDepositPercent: storeSettings.defaultInitialDepositPercent ?? 0,
+                    adminChargePercent: storeSettings.defaultAdminChargePercent ?? 0,
                     isFeatured: true,
                     isPublished: true,
                   });
@@ -2116,6 +2145,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       <button
                         type="button"
                         onClick={() => {
+                          setPackageModalError('');
                           setEditingPackage({ ...pkg, isDemo: false });
                           setShowPackageModal(true);
                         }}
@@ -2164,34 +2194,47 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       {/* E. PRODUCT MANAGEMENT */}
       {tab === 'products' && (canManageProducts || isSuperAdmin) && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-bold text-slate-900">Individual Solar Products</h2>
             {canManageProducts && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingProduct({
-                    id: `prod_${Date.now()}`,
-                    name: '',
-                    model: '',
-                    category: 'Hybrid Inverters',
-                    description: '',
-                    specs: '',
-                    priceNgn: 0,
-                    stock: 10,
-                    lowStockThreshold: 3,
-                    warranty: '',
-                    isBestSeller: false,
-                    isPublished: true,
-                  });
-                  setNotifyUsersOnProductSave(false);
-                  setShowProductModal(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Add Product
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={syncingCatalog}
+                  onClick={handleSyncOfficialCatalog}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 disabled:opacity-60 cursor-pointer"
+                >
+                  <Database className="w-4 h-4" />
+                  {syncingCatalog ? 'Syncing 66 Products...' : 'Sync 66-Item OFFNOT Price List'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProductModalError('');
+                    setEditingProduct({
+                      id: `prod_${Date.now()}`,
+                      name: '',
+                      model: '',
+                      category: 'Hybrid Inverters',
+                      description: '',
+                      specs: '',
+                      priceNgn: 0,
+                      installerPriceNgn: 0,
+                      stock: 10,
+                      lowStockThreshold: 3,
+                      warranty: '12 Months Manufacturer Warranty',
+                      isBestSeller: false,
+                      isPublished: true,
+                    });
+                    setNotifyUsersOnProductSave(false);
+                    setShowProductModal(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Product
+                </button>
+              </div>
             )}
           </div>
 
@@ -2201,7 +2244,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 <tr>
                   <th className="px-5 py-3">Product &amp; Model</th>
                   <th className="px-5 py-3">Category</th>
-                  <th className="px-5 py-3">Price</th>
+                  <th className="px-5 py-3">End-User / Installer Price</th>
                   <th className="px-5 py-3">Stock</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3 text-right">Actions</th>
@@ -2215,8 +2258,15 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       <p className="text-slate-500 font-mono-num">{prod.model}</p>
                     </td>
                     <td className="px-5 py-3 text-slate-700">{prod.category}</td>
-                    <td className="px-5 py-3 font-mono-num font-bold text-emerald-800">
-                      {prod.priceNgn > 0 ? formatNgn(prod.priceNgn) : 'Configure Price'}
+                    <td className="px-5 py-3 font-mono-num">
+                      <div className="font-bold text-emerald-800">
+                        {prod.priceNgn > 0 ? formatNgn(prod.priceNgn) : 'Configure Price'}
+                      </div>
+                      {typeof prod.installerPriceNgn === 'number' && prod.installerPriceNgn > 0 && (
+                        <div className="text-[11px] text-orange-700 font-semibold">
+                          Installer: {formatNgn(prod.installerPriceNgn)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3 font-mono-num">
                       <span
@@ -2243,7 +2293,12 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                         <button
                           type="button"
                           onClick={() => {
-                            setEditingProduct({ ...prod, isDemo: false });
+                            setProductModalError('');
+                            setEditingProduct({
+                              ...prod,
+                              installerPriceNgn: prod.installerPriceNgn ?? prod.priceNgn,
+                              isDemo: false,
+                            });
                             setShowProductModal(true);
                           }}
                           className="px-2.5 py-1 rounded border border-slate-300 font-semibold cursor-pointer"
@@ -3436,27 +3491,42 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             onSubmit={async (e) => {
               e.preventDefault();
               if (savingProduct) return;
+              setProductModalError('');
               const safeName = editingProduct.name.trim().slice(0, 160);
               const safeModel = editingProduct.model.trim().slice(0, 100);
               const safeSpecs = editingProduct.specs.trim().slice(0, 2000);
               const safeDesc = editingProduct.description.trim().slice(0, 2000);
               if (!safeName || !safeModel || !safeSpecs || !safeDesc) {
-                showError('Product name, model code, specifications, and description are required.');
+                const msg = 'Product name, model code, specifications, and description are required.';
+                setProductModalError(msg);
+                showError(msg);
                 return;
               }
               setSavingProduct(true);
               try {
+                const retailPrice = Math.max(0, Math.round(Number(editingProduct.priceNgn) || 0));
+                const instPrice = Math.max(
+                  0,
+                  Math.round(Number(editingProduct.installerPriceNgn ?? retailPrice) || 0)
+                );
                 await setDoc(doc(db, 'products', editingProduct.id), {
-                  ...editingProduct,
+                  id: editingProduct.id,
                   name: safeName,
                   model: safeModel,
-                  specs: safeSpecs,
+                  category: editingProduct.category,
                   description: safeDesc,
-                  warranty: (editingProduct.warranty || '').trim().slice(0, 200),
-                  imageUrl: (editingProduct.imageUrl || '').trim().slice(0, 295000),
-                  priceNgn: Math.max(0, Math.round(Number(editingProduct.priceNgn) || 0)),
+                  specs: safeSpecs,
+                  priceNgn: retailPrice,
+                  installerPriceNgn: instPrice,
                   stock: Math.max(0, Math.round(Number(editingProduct.stock) || 0)),
-                  lowStockThreshold: Math.max(0, Math.round(Number(editingProduct.lowStockThreshold) || 0)),
+                  lowStockThreshold: Math.max(
+                    0,
+                    Math.round(Number(editingProduct.lowStockThreshold ?? 3) || 0)
+                  ),
+                  imageUrl: (editingProduct.imageUrl || '').trim().slice(0, 295000),
+                  warranty: (editingProduct.warranty || '').trim().slice(0, 200),
+                  isBestSeller: Boolean(editingProduct.isBestSeller),
+                  isPublished: Boolean(editingProduct.isPublished),
                   isDemo: false,
                   createdAt: editingProduct.createdAt || serverTimestamp(),
                   updatedAt: serverTimestamp(),
@@ -3468,12 +3538,11 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                   details: `Saved product ${safeName} (${safeModel}).`,
                 });
                 if (notifyUsersOnProductSave && editingProduct.isPublished && usersList.length > 0) {
-                  const safePrice = Math.max(0, Math.round(Number(editingProduct.priceNgn) || 0));
                   await broadcastToAllCustomers({
                     subject: `New Product Alert: ${safeName} at OFFNOT ENERGY`,
                     message: `Good news! ${safeName} (${safeModel}) is now available in our ${editingProduct.category} catalog.\n\nPrice: ${
-                      safePrice > 0 ? formatNgn(safePrice) : 'Contact Branch for Price'
-                    }\nSpecs: ${safeSpecs}\n\n${safeDesc}\n\nShop online or visit our Dugbe and Dalute branches in Ibadan.`,
+                      retailPrice > 0 ? formatNgn(retailPrice) : 'Contact Branch for Price'
+                    }\nSpecs: ${safeSpecs}\n\n${safeDesc}\n\nShop online or visit our Dugbe Head Office and Dalute Branch in Ibadan.`,
                     campaignType: 'new_product',
                     notifType: 'NEW_PRODUCT_ANNOUNCEMENT',
                   });
@@ -3484,7 +3553,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 setNotifyUsersOnProductSave(false);
                 setShowProductModal(false);
               } catch (err) {
-                showError(err instanceof Error ? err.message : 'Unable to save product.');
+                const msg = err instanceof Error ? err.message : 'Unable to save product.';
+                setProductModalError(msg);
+                showError(msg);
                 handleFirestoreError(err, OperationType.WRITE, `products/${editingProduct.id}`);
               } finally {
                 setSavingProduct(false);
@@ -3502,6 +3573,12 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {productModalError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">
+                {productModalError}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
@@ -3542,7 +3619,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 </select>
               </div>
               <div>
-                <label className="block font-semibold mb-1">Price (₦)</label>
+                <label className="block font-semibold mb-1">End-User Retail Price (₦)</label>
                 <input
                   required
                   type="number"
@@ -3552,6 +3629,23 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                     setEditingProduct({ ...editingProduct, priceNgn: Number(e.target.value) })
                   }
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono-num"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1 text-orange-800">
+                  Installer Wholesale Price (₦)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editingProduct.installerPriceNgn ?? editingProduct.priceNgn}
+                  onChange={(e) =>
+                    setEditingProduct({
+                      ...editingProduct,
+                      installerPriceNgn: Number(e.target.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-orange-300 text-sm font-mono-num"
                 />
               </div>
               <div>
@@ -3567,7 +3661,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono-num"
                 />
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block font-semibold mb-1">Warranty</label>
                 <input
                   value={editingProduct.warranty || ''}
@@ -3596,7 +3690,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                         const url = await compressImageToDataUrl(file);
                         setEditingProduct({ ...editingProduct, imageUrl: url });
                       } catch (err) {
-                        showError(err instanceof Error ? err.message : 'Unable to process image.');
+                        const msg = err instanceof Error ? err.message : 'Unable to process image.';
+                        setProductModalError(msg);
+                        showError(msg);
                       }
                     }}
                   />
@@ -3689,35 +3785,39 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             onSubmit={async (e) => {
               e.preventDefault();
               if (savingPackage) return;
+              setPackageModalError('');
               const safeName = editingPackage.name.trim().slice(0, 160);
               const safeKva = editingPackage.capacityKva.trim().slice(0, 60);
               const safeInv = editingPackage.inverterCapacity.trim().slice(0, 120);
               const safeBat = editingPackage.batteryCapacity.trim().slice(0, 120);
               const safeTech = editingPackage.batteryTechnology.trim().slice(0, 120);
               const safeWatt = editingPackage.panelWattage.trim().slice(0, 100);
-              const safeAcc = editingPackage.accessoriesIncluded.trim().slice(0, 1000);
-              const safeInst = editingPackage.installationDetails.trim().slice(0, 1000);
-              const safeWar = editingPackage.warrantyInfo.trim().slice(0, 500);
+              const safeAcc =
+                editingPackage.accessoriesIncluded.trim().slice(0, 1000) ||
+                'DC/AC Surge Protection Devices, Breaker Box, DC & AC Solar Cables, Mounting Rails';
+              const safeInst =
+                editingPackage.installationDetails.trim().slice(0, 1000) ||
+                'Professional rooftop mounting, commissioning, and load testing after 100% full payment.';
+              const safeWar =
+                editingPackage.warrantyInfo.trim().slice(0, 500) ||
+                'Official OFFNOT ENERGY & Manufacturer Warranty';
               const safeDesc = editingPackage.description.trim().slice(0, 2500);
-              if (
-                !safeName ||
-                !safeKva ||
-                !safeInv ||
-                !safeBat ||
-                !safeTech ||
-                !safeWatt ||
-                !safeAcc ||
-                !safeInst ||
-                !safeWar ||
-                !safeDesc
-              ) {
-                showError('Please fill in all required solar package fields.');
+              if (!safeName || !safeKva || !safeInv || !safeBat || !safeTech || !safeWatt || !safeDesc) {
+                const msg =
+                  'Please fill in Package Name, Capacity, Inverter, Battery, Panel Wattage, and Description.';
+                setPackageModalError(msg);
+                showError(msg);
                 return;
               }
               setSavingPackage(true);
               try {
+                const cleanAllowedDurations =
+                  editingPackage.allowedDurations && editingPackage.allowedDurations.length > 0
+                    ? editingPackage.allowedDurations
+                    : [1, 2, 3, 4, 5];
+                const safePrice = Math.max(0, Math.round(Number(editingPackage.priceNgn) || 0));
                 await setDoc(doc(db, 'packages', editingPackage.id), {
-                  ...editingPackage,
+                  id: editingPackage.id,
                   name: safeName,
                   capacityKva: safeKva,
                   inverterCapacity: safeInv,
@@ -3729,8 +3829,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                   installationDetails: safeInst,
                   warrantyInfo: safeWar,
                   description: safeDesc,
+                  priceNgn: safePrice,
                   imageUrl: (editingPackage.imageUrl || '').trim().slice(0, 295000),
-                  priceNgn: Math.max(0, Math.round(Number(editingPackage.priceNgn) || 0)),
+                  allowedDurations: cleanAllowedDurations,
                   initialDepositPercent: Math.min(
                     90,
                     Math.max(0, Number(editingPackage.initialDepositPercent) || 0)
@@ -3739,10 +3840,8 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                     50,
                     Math.max(0, Number(editingPackage.adminChargePercent) || 0)
                   ),
-                  allowedDurations:
-                    editingPackage.allowedDurations.length > 0
-                      ? editingPackage.allowedDurations
-                      : [1, 2, 3, 4, 5],
+                  isFeatured: Boolean(editingPackage.isFeatured),
+                  isPublished: Boolean(editingPackage.isPublished),
                   isDemo: false,
                   createdAt: editingPackage.createdAt || serverTimestamp(),
                   updatedAt: serverTimestamp(),
@@ -3754,7 +3853,6 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                   details: `Saved solar package ${safeName} (${safeKva}).`,
                 });
                 if (notifyUsersOnPackageSave && editingPackage.isPublished && usersList.length > 0) {
-                  const safePrice = Math.max(0, Math.round(Number(editingPackage.priceNgn) || 0));
                   await broadcastToAllCustomers({
                     subject: `New Solar Package Launch: ${safeName} (${safeKva})`,
                     message: `Introducing ${safeName} (${safeKva}) at OFFNOT ENERGY!\n\nPrice: ${formatNgn(
@@ -3774,7 +3872,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 setNotifyUsersOnPackageSave(false);
                 setShowPackageModal(false);
               } catch (err) {
-                showError(err instanceof Error ? err.message : 'Unable to save solar package.');
+                const msg = err instanceof Error ? err.message : 'Unable to save solar package.';
+                setPackageModalError(msg);
+                showError(msg);
                 handleFirestoreError(err, OperationType.WRITE, `packages/${editingPackage.id}`);
               } finally {
                 setSavingPackage(false);
@@ -3792,6 +3892,12 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {packageModalError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">
+                {packageModalError}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>

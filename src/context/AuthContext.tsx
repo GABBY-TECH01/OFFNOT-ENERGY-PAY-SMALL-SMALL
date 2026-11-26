@@ -32,10 +32,28 @@ import {
   sendEmailVerification,
   updatePassword,
 } from '../firebase';
-import type { RolePermission, SavedAddress, StaffMember, StaffRole, UserProfile } from '../types';
+import type {
+  AccountPricingType,
+  RolePermission,
+  SavedAddress,
+  StaffMember,
+  StaffRole,
+  UserProfile,
+} from '../types';
 import { DEFAULT_ROLE_PERMISSIONS } from '../utils/seedData';
 
 const BOOTSTRAP_ADMIN_EMAILS = ['francisgabriel932@gmail.com'];
+const INSTALLER_CHOICE_STORAGE_KEY = 'offnot_installer_choice_v1';
+
+function readStoredAccountTypeChoice(): AccountPricingType | null {
+  try {
+    const val = sessionStorage.getItem(INSTALLER_CHOICE_STORAGE_KEY);
+    if (val === 'installer' || val === 'end_user') return val;
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 interface AuthContextValue {
   user: User | null;
@@ -45,13 +63,22 @@ interface AuthContextValue {
   permissions: RolePermission | null;
   isStaff: boolean;
   isSuperAdmin: boolean;
+  isInstaller: boolean;
+  accountTypeChoice: AccountPricingType | null;
+  setInstallerChoice: (isInstallerChoice: boolean) => Promise<void>;
   isBootstrapEmailUnverified: boolean;
   authReady: boolean;
   staffLoading: boolean;
   savedAddresses: SavedAddress[];
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  registerWithEmail: (name: string, email: string, password: string, phone: string) => Promise<void>;
+  signInWithGoogle: (selectedType?: AccountPricingType) => Promise<void>;
+  signInWithEmail: (email: string, password: string, selectedType?: AccountPricingType) => Promise<void>;
+  registerWithEmail: (
+    name: string,
+    email: string,
+    password: string,
+    phone: string,
+    selectedType?: AccountPricingType
+  ) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
   linkOrUpdatePassword: (newPassword: string) => Promise<void>;
@@ -71,6 +98,7 @@ interface AuthContextValue {
     defaultAddress: string;
     defaultCity: string;
     defaultState: string;
+    accountType?: AccountPricingType;
   }) => Promise<void>;
   addSavedAddress: (addr: Omit<SavedAddress, 'id' | 'userId' | 'createdAt'>) => Promise<void>;
   deleteSavedAddress: (addressId: string) => Promise<void>;
@@ -86,6 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [authReady, setAuthReady] = useState(false);
   const [staffLoading, setStaffLoading] = useState(true);
+  const [accountTypeChoice, setAccountTypeChoice] = useState<AccountPricingType | null>(() =>
+    readStoredAccountTypeChoice()
+  );
   const [, setAuthVersion] = useState(0);
 
   const isBootstrapEmailMatch = Boolean(
@@ -103,6 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isStaff = Boolean(staffRole);
   const isSuperAdmin = staffRole === 'super_admin';
+  const effectiveAccountType: AccountPricingType =
+    profile?.accountType || accountTypeChoice || 'end_user';
+  const isInstaller = effectiveAccountType === 'installer';
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -119,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setStaffLoading(true);
       try {
+        const storedChoice = readStoredAccountTypeChoice();
         const userRef = doc(db, 'users', firebaseUser.uid);
         const snap = await getDoc(userRef);
         if (!snap.exists()) {
@@ -128,10 +163,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'OFFNOT User',
             email: firebaseUser.email || '',
             phone: '',
+            accountType: storedChoice || 'end_user',
             defaultAddress: '',
             defaultCity: 'Ibadan',
             defaultState: 'Oyo State',
             createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else if (storedChoice && snap.data()?.accountType !== storedChoice) {
+          await updateDoc(userRef, {
+            accountType: storedChoice,
             updatedAt: serverTimestamp(),
           });
         }
@@ -213,28 +254,101 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubPerm();
   }, [staffRole]);
 
-  async function signInWithGoogle() {
-    setStaffLoading(true);
+  async function setInstallerChoice(isInstallerChoice: boolean) {
+    const nextType: AccountPricingType = isInstallerChoice ? 'installer' : 'end_user';
+    setAccountTypeChoice(nextType);
     try {
-      await signInWithPopup(auth, googleProvider);
+      sessionStorage.setItem(INSTALLER_CHOICE_STORAGE_KEY, nextType);
+    } catch {
+      // ignore storage failure
+    }
+    if (auth.currentUser) {
+      try {
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          accountType: nextType,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.warn('Unable to update account pricing tier:', err);
+      }
+    }
+  }
+
+  async function signInWithGoogle(selectedType?: AccountPricingType) {
+    setStaffLoading(true);
+    if (selectedType) {
+      setAccountTypeChoice(selectedType);
+      try {
+        sessionStorage.setItem(INSTALLER_CHOICE_STORAGE_KEY, selectedType);
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      const cred = await signInWithPopup(auth, googleProvider);
+      if (selectedType && cred.user) {
+        const userRef = doc(db, 'users', cred.user.uid);
+        const snap = await getDoc(userRef);
+        if (snap.exists() && snap.data()?.accountType !== selectedType) {
+          await updateDoc(userRef, {
+            accountType: selectedType,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
     } catch (err) {
       setStaffLoading(false);
       throw err;
     }
   }
 
-  async function signInWithEmail(email: string, password: string) {
+  async function signInWithEmail(
+    email: string,
+    password: string,
+    selectedType?: AccountPricingType
+  ) {
     setStaffLoading(true);
+    if (selectedType) {
+      setAccountTypeChoice(selectedType);
+      try {
+        sessionStorage.setItem(INSTALLER_CHOICE_STORAGE_KEY, selectedType);
+      } catch {
+        // ignore
+      }
+    }
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (selectedType && cred.user) {
+        const userRef = doc(db, 'users', cred.user.uid);
+        const snap = await getDoc(userRef);
+        if (snap.exists() && snap.data()?.accountType !== selectedType) {
+          await updateDoc(userRef, {
+            accountType: selectedType,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
     } catch (err) {
       setStaffLoading(false);
       throw err;
     }
   }
 
-  async function registerWithEmail(name: string, email: string, password: string, phone: string) {
+  async function registerWithEmail(
+    name: string,
+    email: string,
+    password: string,
+    phone: string,
+    selectedType?: AccountPricingType
+  ) {
     setStaffLoading(true);
+    const chosenType: AccountPricingType = selectedType || accountTypeChoice || 'end_user';
+    setAccountTypeChoice(chosenType);
+    try {
+      sessionStorage.setItem(INSTALLER_CHOICE_STORAGE_KEY, chosenType);
+    } catch {
+      // ignore
+    }
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       if (name.trim()) {
@@ -253,6 +367,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           displayName: name.trim() || email.trim().split('@')[0],
           email: email.trim(),
           phone: phone.trim(),
+          accountType: chosenType,
           defaultAddress: '',
           defaultCity: 'Ibadan',
           defaultState: 'Oyo State',
@@ -366,6 +481,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
+    setAccountTypeChoice(null);
+    try {
+      sessionStorage.removeItem(INSTALLER_CHOICE_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     await signOut(auth);
   }
 
@@ -375,6 +496,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     defaultAddress: string;
     defaultCity: string;
     defaultState: string;
+    accountType?: AccountPricingType;
   }) {
     if (!user) throw new Error('You must be signed in.');
     const safeName = updates.displayName.trim().slice(0, 120);
@@ -386,6 +508,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultAddress: updates.defaultAddress.trim().slice(0, 300),
         defaultCity: updates.defaultCity.trim().slice(0, 100),
         defaultState: updates.defaultState.trim().slice(0, 80),
+        ...(updates.accountType ? { accountType: updates.accountType } : {}),
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
@@ -436,6 +559,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         permissions,
         isStaff,
         isSuperAdmin,
+        isInstaller,
+        accountTypeChoice,
+        setInstallerChoice,
         isBootstrapEmailUnverified,
         authReady,
         staffLoading,

@@ -1,8 +1,9 @@
 import React from 'react';
 import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import type { PageRoute } from '../types';
-import { formatNgn } from '../utils/instalments';
+import { formatNgn, getEffectiveProductPrice } from '../utils/instalments';
 import { ProductVisual } from './ProductVisual';
 
 interface CartDrawerProps {
@@ -10,6 +11,7 @@ interface CartDrawerProps {
 }
 
 export function CartDrawer({ onNavigate }: CartDrawerProps) {
+  const { isInstaller } = useAuth();
   const {
     items,
     subtotalNgn,
@@ -34,7 +36,11 @@ export function CartDrawer({ onNavigate }: CartDrawerProps) {
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Your Shopping Cart</h2>
-            <p className="text-xs text-slate-500">Individual Solar Products · Full Payment Checkout</p>
+            <p className="text-xs text-slate-500">
+              {isInstaller
+                ? 'Installer Pricing Active · Full Payment Checkout'
+                : 'Individual Solar Products · Full Payment Checkout'}
+            </p>
           </div>
           <button
             type="button"
@@ -81,57 +87,60 @@ export function CartDrawer({ onNavigate }: CartDrawerProps) {
               </div>
             </div>
           ) : (
-            items.map(({ product, quantity }) => (
-              <div
-                key={product.id}
-                className="flex gap-4 p-3.5 rounded-xl border border-slate-200 bg-white"
-              >
-                <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 border border-slate-100">
-                  <ProductVisual
-                    imageUrl={product.imageUrl}
-                    alt={product.name}
-                    category={product.category}
-                    className="w-full h-full"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500 truncate">{product.category}</p>
-                  <h3 className="text-sm font-semibold text-slate-900 truncate">{product.name}</h3>
-                  <p className="text-sm font-bold text-emerald-800 font-mono-num mt-0.5">
-                    {formatNgn(product.priceNgn)}
-                  </p>
-                  <div className="flex items-center justify-between mt-2.5">
-                    <div className="inline-flex items-center border border-slate-200 rounded-lg">
+            items.map(({ product, quantity }) => {
+              const unitPrice = getEffectiveProductPrice(product, isInstaller);
+              return (
+                <div
+                  key={product.id}
+                  className="flex gap-4 p-3.5 rounded-xl border border-slate-200 bg-white"
+                >
+                  <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 border border-slate-100">
+                    <ProductVisual
+                      imageUrl={product.imageUrl}
+                      alt={product.name}
+                      category={product.category}
+                      className="w-full h-full"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-500 truncate">{product.category}</p>
+                    <h3 className="text-sm font-semibold text-slate-900 truncate">{product.name}</h3>
+                    <p className="text-sm font-bold text-emerald-800 font-mono-num mt-0.5">
+                      {formatNgn(unitPrice)}
+                    </p>
+                    <div className="flex items-center justify-between mt-2.5">
+                      <div className="inline-flex items-center border border-slate-200 rounded-lg">
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(product.id, quantity - 1)}
+                          className="p-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="px-2.5 text-xs font-semibold font-mono-num">{quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(product.id, quantity + 1)}
+                          className="p-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => updateQuantity(product.id, quantity - 1)}
-                        className="p-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer"
-                        aria-label="Decrease quantity"
+                        onClick={() => removeFromCart(product.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 cursor-pointer"
+                        aria-label="Remove item"
                       >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="px-2.5 text-xs font-semibold font-mono-num">{quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(product.id, quantity + 1)}
-                        className="p-1.5 text-slate-600 hover:bg-slate-50 cursor-pointer"
-                        aria-label="Increase quantity"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFromCart(product.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 cursor-pointer"
-                      aria-label="Remove item"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

@@ -55,11 +55,14 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   accounts_staff: 'Accounts Staff',
 };
 
+export type AccountPricingType = 'installer' | 'end_user';
+
 export interface UserProfile {
   uid: string;
   displayName: string;
   email: string;
   phone?: string;
+  accountType?: AccountPricingType;
   defaultAddress?: string;
   defaultCity?: string;
   defaultState?: string;
@@ -116,6 +119,7 @@ export interface Product {
   description: string;
   specs: string;
   priceNgn: number;
+  installerPriceNgn?: number;
   stock: number;
   lowStockThreshold?: number;
   imageUrl?: string;

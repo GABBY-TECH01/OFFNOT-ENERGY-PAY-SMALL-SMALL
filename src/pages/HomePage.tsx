@@ -16,10 +16,11 @@ import {
 } from 'lucide-react';
 import { BranchMap } from '../components/BranchMap';
 import { HeroSolarIllustration, ProductVisual } from '../components/ProductVisual';
+import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useStore } from '../context/StoreContext';
 import type { PageRoute, Product, SolarPackage } from '../types';
-import { calculateInstalmentPlan, formatNgn } from '../utils/instalments';
+import { calculateInstalmentPlan, formatNgn, getEffectiveProductPrice } from '../utils/instalments';
 
 interface HomePageProps {
   onNavigate: (route: PageRoute, section?: string) => void;
@@ -58,6 +59,7 @@ const HOME_FAQS = [
 ];
 
 export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
+  const { isInstaller } = useAuth();
   const { packages, products, reviews, usingDemoCatalog } = useStore();
   const { addToCart, setCheckoutMode, setDrawerOpen } = useCart();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -333,56 +335,64 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {displayProducts.map((product) => (
-            <div
-              key={product.id}
-              className="group rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col hover:shadow-md transition-shadow"
-            >
-              <ProductVisual
-                imageUrl={product.imageUrl}
-                alt={product.name}
-                category={product.category}
-                className="w-full h-44"
-              />
-              <div className="p-5 flex-1 flex flex-col">
-                <p className="text-xs font-medium text-slate-500 mb-1">{product.category}</p>
-                <h3 className="text-sm font-bold text-slate-900 mb-1 line-clamp-2">
-                  {product.name}
-                </h3>
-                <p className="text-xs text-slate-500 font-mono-num mb-3">Model: {product.model}</p>
+          {displayProducts.map((product) => {
+            const displayPrice = getEffectiveProductPrice(product, isInstaller);
+            return (
+              <div
+                key={product.id}
+                className="group rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col hover:shadow-md transition-shadow"
+              >
+                <ProductVisual
+                  imageUrl={product.imageUrl}
+                  alt={product.name}
+                  category={product.category}
+                  className="w-full h-44"
+                />
+                <div className="p-5 flex-1 flex flex-col">
+                  <p className="text-xs font-medium text-slate-500 mb-1">{product.category}</p>
+                  <h3 className="text-sm font-bold text-slate-900 mb-1 line-clamp-2">
+                    {product.name}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono-num mb-3">Model: {product.model}</p>
 
-                <div className="mt-auto pt-3 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-base font-extrabold text-slate-900 font-mono-num">
-                      {product.priceNgn > 0 ? formatNgn(product.priceNgn) : 'Set Price in Admin'}
-                    </span>
-                    <span className="text-[11px] font-medium text-emerald-700">
-                      {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      disabled={product.stock <= 0 || product.priceNgn <= 0}
-                      onClick={() => addToCart(product, 1)}
-                      className="inline-flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
-                    >
-                      <ShoppingCart className="w-3.5 h-3.5" />
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      disabled={product.stock <= 0 || product.priceNgn <= 0}
-                      onClick={() => handleBuyProductNow(product)}
-                      className="py-2 px-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
-                    >
-                      Buy Now
-                    </button>
+                  <div className="mt-auto pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <span className="text-base font-extrabold text-slate-900 font-mono-num">
+                          {displayPrice > 0 ? formatNgn(displayPrice) : 'Set Price in Admin'}
+                        </span>
+                        {isInstaller && product.priceNgn > displayPrice && (
+                          <p className="text-[11px] font-semibold text-orange-700">Installer Price</p>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-medium text-emerald-700">
+                        {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={product.stock <= 0 || displayPrice <= 0}
+                        onClick={() => addToCart(product, 1)}
+                        className="inline-flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        disabled={product.stock <= 0 || displayPrice <= 0}
+                        onClick={() => handleBuyProductNow(product)}
+                        className="py-2 px-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+                      >
+                        Buy Now
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

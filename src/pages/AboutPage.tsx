@@ -74,8 +74,8 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
             desc: 'Customers pay conveniently over 2 to 5 months with transparent pricing, official digital receipts, and clear milestone tracking.',
           },
           {
-            title: 'Two Ibadan Service Hubs',
-            desc: 'Walk into our Dugbe Iyaganku Road or Dalute Road offices for live product inspection, technical advice, and nationwide order dispatch.',
+            title: 'Head Office & Branch Office in Ibadan',
+            desc: 'Visit our Head Office opposite Sweetco, Dugbe Iyaganku Road or our Branch Office inside Tipper Garage, Dalute Road for live product inspection, wholesale pickup, and technical advice.',
           },
         ].map((card) => (
           <div key={card.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-6">

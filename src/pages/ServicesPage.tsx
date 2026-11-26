@@ -132,10 +132,10 @@ export function ServicesPage() {
               <strong>Customer Service:</strong> 07047053453
             </p>
             <p>
-              <strong>Dugbe Branch:</strong> 07064159047
+              <strong>Head Office (Dugbe):</strong> 07064159047
             </p>
             <p>
-              <strong>Dalute Branch:</strong> 08087928125
+              <strong>Branch Office (Dalute):</strong> 08087928125
             </p>
             <p>
               <strong>Email:</strong> offnotenergy@gmail.com
@@ -196,8 +196,8 @@ export function ServicesPage() {
                 onChange={(e) => setBranch(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm bg-white"
               >
-                <option value="Dugbe Branch">Dugbe Branch (Iyaganku Road)</option>
-                <option value="Dalute Branch">Dalute Branch (Tipper Garage)</option>
+                <option value="Dugbe Branch">Head Office — Dugbe (Opposite Sweetco, Iyaganku Rd)</option>
+                <option value="Dalute Branch">Branch Office — Dalute (Inside Tipper Garage)</option>
                 <option value="Nationwide Support">Nationwide Delivery / Remote</option>
               </select>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BatteryCharging,
   Cable,
@@ -26,6 +26,10 @@ export function ProductVisual({
   className = 'w-full h-56',
 }: ProductVisualProps) {
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [imageUrl]);
 
   if (imageUrl && !imgError) {
     return (
