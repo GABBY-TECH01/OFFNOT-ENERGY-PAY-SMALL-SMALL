@@ -59,7 +59,7 @@ const HOME_FAQS = [
 
 export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
   const { packages, products, reviews, usingDemoCatalog } = useStore();
-  const { addToCart, setCheckoutMode } = useCart();
+  const { addToCart, setCheckoutMode, setDrawerOpen } = useCart();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   const featuredPackages = packages.filter((p) => p.isPublished).slice(0, 3);
@@ -68,7 +68,8 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
     bestProducts.length > 0 ? bestProducts : products.filter((p) => p.isPublished).slice(0, 4);
 
   const handleBuyProductNow = (product: Product) => {
-    addToCart(product, 1);
+    addToCart(product, 1, false);
+    setDrawerOpen(false);
     setCheckoutMode('cart');
     onNavigate('checkout');
   };

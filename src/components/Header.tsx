@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  LogOut,
   Menu,
   MessageCircle,
   Shield,
@@ -28,7 +29,7 @@ const NAV_ITEMS: { label: string; route: PageRoute }[] = [
 ];
 
 export function Header({ currentRoute, onNavigate }: HeaderProps) {
-  const { user, isStaff } = useAuth();
+  const { user, isStaff, logout } = useAuth();
   const { itemCount, setDrawerOpen } = useCart();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -185,7 +186,7 @@ export function Header({ currentRoute, onNavigate }: HeaderProps) {
               Staff Admin Portal
             </button>
           )}
-          <div className="pt-2 border-t border-slate-100">
+          <div className="pt-2 border-t border-slate-100 space-y-2">
             <a
               href={buildWhatsAppLink(
                 'Hello OFFNOT ENERGY, I need support with a solar order or package.'
@@ -197,6 +198,19 @@ export function Header({ currentRoute, onNavigate }: HeaderProps) {
               <MessageCircle className="w-4 h-4" />
               Chat on WhatsApp (07047053453)
             </a>
+            {user && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  void logout();
+                }}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                Log Out
+              </button>
+            )}
           </div>
         </div>
       )}

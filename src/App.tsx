@@ -43,133 +43,274 @@ function AppShell() {
     return () => window.removeEventListener('gmp-quota-exceeded', onQuota);
   }, []);
 
-  // Paystack Redirect Callback Verification
+  // Paystack & Flutterwave Redirect Callback Verification
   useEffect(() => {
     if (!authReady || !user) return;
     const params = new URLSearchParams(window.location.search);
-    const reference = params.get('reference') || params.get('trxref');
-    if (!reference) return;
 
-    const pendingRaw = sessionStorage.getItem('offnot_pending_paystack');
-    if (!pendingRaw) return;
+    // 1. Check Paystack return (?reference=... or ?trxref=...)
+    const pskReference = params.get('reference') || params.get('trxref');
+    if (pskReference) {
+      const pendingRaw = sessionStorage.getItem('offnot_pending_paystack');
+      if (!pendingRaw) return;
 
-    let pending: {
-      orderId: string;
-      orderNumber: string;
-      amountNgn: number;
-      instalmentNumber: number;
-    };
-    try {
-      pending = JSON.parse(pendingRaw);
-    } catch {
+      let pending: {
+        orderId: string;
+        orderNumber: string;
+        amountNgn: number;
+        instalmentNumber: number;
+      };
+      try {
+        pending = JSON.parse(pendingRaw);
+      } catch {
+        sessionStorage.removeItem('offnot_pending_paystack');
+        return;
+      }
+
       sessionStorage.removeItem('offnot_pending_paystack');
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      (async () => {
+        try {
+          const res = await fetch('/api/payments/paystack/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: pskReference,
+              expectedAmountNgn: pending.amountNgn,
+            }),
+          });
+          const data = (await res.json()) as {
+            verified?: boolean;
+            amountNgn?: number;
+            channel?: string;
+            message?: string;
+          };
+
+          if (!res.ok || !data.verified) {
+            setPaymentToast(data.message || 'Unable to verify Paystack transaction.');
+            return;
+          }
+
+          const orderRef = doc(db, 'orders', pending.orderId);
+          const orderSnap = await getDoc(orderRef);
+          if (!orderSnap.exists()) return;
+          const order = orderSnap.data() as Order;
+
+          const paidAmt = Math.round(data.amountNgn || pending.amountNgn);
+          const payId = `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+          const receiptNumber = `RCP-${String(Date.now()).slice(-7)}`;
+
+          await setDoc(doc(db, 'payments', payId), {
+            id: payId,
+            receiptNumber,
+            reference: pskReference,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            userId: user.uid,
+            customerName: order.customerName,
+            customerEmail: order.customerEmail,
+            amountNgn: paidAmt,
+            method: 'paystack',
+            channel: data.channel || 'Paystack Online',
+            status: 'VERIFIED',
+            instalmentNumber: pending.instalmentNumber || 1,
+            notes: 'Server-verified Paystack payment',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          const totalNgn = Math.round(order.totalAmountNgn || 0);
+          const newPaid = Math.min(totalNgn, Math.round(order.amountPaidNgn || 0) + paidAmt);
+          const newOutstanding = Math.max(0, totalNgn - newPaid);
+          const fullyPaid = newOutstanding === 0;
+
+          let remainingCovered = newPaid;
+          const updatedSchedule: InstalmentScheduleItem[] | undefined = order.schedule?.map((item) => {
+            if (remainingCovered >= item.amountNgn) {
+              remainingCovered -= item.amountNgn;
+              return {
+                ...item,
+                status: 'PAID',
+                paidAt: item.paidAt || new Date().toISOString().split('T')[0],
+                paymentReference: item.paymentReference || pskReference,
+              };
+            }
+            return item;
+          });
+
+          const nextPending = updatedSchedule?.find((s) => s.status !== 'PAID');
+          const nextDueDate = fullyPaid ? '' : nextPending?.dueDate || order.nextPaymentDueDate || '';
+
+          await updateDoc(orderRef, {
+            amountPaidNgn: newPaid,
+            outstandingBalanceNgn: newOutstanding,
+            paymentStatus: fullyPaid ? 'FULLY_PAID' : 'PARTIALLY_PAID',
+            orderStatus: fullyPaid ? 'FULLY_PAID_AWAITING_DELIVERY' : 'IN_INSTALMENT',
+            ...(updatedSchedule ? { schedule: updatedSchedule } : {}),
+            nextPaymentDueDate: nextDueDate,
+            updatedAt: serverTimestamp(),
+          });
+
+          await logAndSendNotification({
+            userId: user.uid,
+            recipientEmail: order.customerEmail,
+            recipientPhone: order.customerPhone,
+            type: fullyPaid ? 'FULL_PAYMENT_COMPLETED' : 'PAYMENT_VERIFIED',
+            title: `Payment Confirmed (${receiptNumber})`,
+            message: fullyPaid
+              ? `Your Paystack payment of ${formatNgn(paidAmt)} is verified. Order ${order.orderNumber} is now FULLY PAID – AWAITING DELIVERY.`
+              : `Your Paystack instalment payment of ${formatNgn(paidAmt)} is verified. Remaining balance: ${formatNgn(newOutstanding)}.`,
+            orderId: order.id,
+          });
+
+          setPaymentToast(
+            `Payment verified (${receiptNumber}). Order ${order.orderNumber} updated.`
+          );
+          setRoute('account');
+        } catch (err) {
+          setPaymentToast(err instanceof Error ? err.message : 'Payment verification error.');
+        }
+      })();
       return;
     }
 
-    sessionStorage.removeItem('offnot_pending_paystack');
-    window.history.replaceState({}, document.title, window.location.pathname);
+    // 2. Check Flutterwave return (?status=...&tx_ref=...&transaction_id=...)
+    const flwTxRef = params.get('tx_ref');
+    const flwStatus = params.get('status');
+    const flwTransactionId = params.get('transaction_id');
+    if (flwTxRef || flwTransactionId) {
+      const pendingRaw = sessionStorage.getItem('offnot_pending_flutterwave');
+      if (!pendingRaw) return;
 
-    (async () => {
+      let pending: {
+        orderId: string;
+        orderNumber: string;
+        amountNgn: number;
+        instalmentNumber: number;
+      };
       try {
-        const res = await fetch('/api/payments/paystack/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            reference,
-            expectedAmountNgn: pending.amountNgn,
-          }),
-        });
-        const data = (await res.json()) as {
-          verified?: boolean;
-          amountNgn?: number;
-          channel?: string;
-          message?: string;
-        };
-
-        if (!res.ok || !data.verified) {
-          setPaymentToast(data.message || 'Unable to verify Paystack transaction.');
-          return;
-        }
-
-        const orderRef = doc(db, 'orders', pending.orderId);
-        const orderSnap = await getDoc(orderRef);
-        if (!orderSnap.exists()) return;
-        const order = orderSnap.data() as Order;
-
-        const paidAmt = data.amountNgn || pending.amountNgn;
-        const payId = `pay_${Date.now()}`;
-        const receiptNumber = `RCP-${String(Date.now()).slice(-7)}`;
-
-        await setDoc(doc(db, 'payments', payId), {
-          id: payId,
-          receiptNumber,
-          reference,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          userId: user.uid,
-          customerName: order.customerName,
-          customerEmail: order.customerEmail,
-          amountNgn: paidAmt,
-          method: 'paystack',
-          channel: data.channel || 'Paystack Online',
-          status: 'VERIFIED',
-          instalmentNumber: pending.instalmentNumber || 1,
-          notes: 'Server-verified Paystack payment',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        const newPaid = Math.min(order.totalAmountNgn, (order.amountPaidNgn || 0) + paidAmt);
-        const newOutstanding = Math.max(0, order.totalAmountNgn - newPaid);
-        const fullyPaid = newOutstanding === 0;
-
-        let remainingCovered = newPaid;
-        const updatedSchedule: InstalmentScheduleItem[] | undefined = order.schedule?.map((item) => {
-          if (remainingCovered >= item.amountNgn) {
-            remainingCovered -= item.amountNgn;
-            return {
-              ...item,
-              status: 'PAID',
-              paidAt: item.paidAt || new Date().toISOString().split('T')[0],
-              paymentReference: item.paymentReference || reference,
-            };
-          }
-          return item;
-        });
-
-        const nextPending = updatedSchedule?.find((s) => s.status !== 'PAID');
-        const nextDueDate = fullyPaid ? '' : nextPending?.dueDate || order.nextPaymentDueDate || '';
-
-        await updateDoc(orderRef, {
-          amountPaidNgn: newPaid,
-          outstandingBalanceNgn: newOutstanding,
-          paymentStatus: fullyPaid ? 'FULLY_PAID' : 'PARTIALLY_PAID',
-          orderStatus: fullyPaid ? 'FULLY_PAID_AWAITING_DELIVERY' : 'IN_INSTALMENT',
-          ...(updatedSchedule ? { schedule: updatedSchedule } : {}),
-          nextPaymentDueDate: nextDueDate,
-          updatedAt: serverTimestamp(),
-        });
-
-        await logAndSendNotification({
-          userId: user.uid,
-          recipientEmail: order.customerEmail,
-          recipientPhone: order.customerPhone,
-          type: fullyPaid ? 'FULL_PAYMENT_COMPLETED' : 'PAYMENT_VERIFIED',
-          title: `Payment Confirmed (${receiptNumber})`,
-          message: fullyPaid
-            ? `Your Paystack payment of ${formatNgn(paidAmt)} is verified. Order ${order.orderNumber} is now FULLY PAID – AWAITING DELIVERY.`
-            : `Your Paystack instalment payment of ${formatNgn(paidAmt)} is verified. Remaining balance: ${formatNgn(newOutstanding)}.`,
-          orderId: order.id,
-        });
-
-        setPaymentToast(
-          `Payment verified (${receiptNumber}). Order ${order.orderNumber} updated.`
-        );
-        setRoute('account');
-      } catch (err) {
-        setPaymentToast(err instanceof Error ? err.message : 'Payment verification error.');
+        pending = JSON.parse(pendingRaw);
+      } catch {
+        sessionStorage.removeItem('offnot_pending_flutterwave');
+        return;
       }
-    })();
+
+      sessionStorage.removeItem('offnot_pending_flutterwave');
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      if (flwStatus === 'cancelled' || !flwTransactionId) {
+        setPaymentToast('Flutterwave checkout was cancelled. You can retry payment anytime from My Account.');
+        setRoute('account');
+        return;
+      }
+
+      (async () => {
+        try {
+          const res = await fetch('/api/payments/flutterwave/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transactionId: flwTransactionId,
+              expectedAmountNgn: pending.amountNgn,
+            }),
+          });
+          const data = (await res.json()) as {
+            verified?: boolean;
+            reference?: string;
+            amountNgn?: number;
+            channel?: string;
+            message?: string;
+          };
+
+          if (!res.ok || !data.verified) {
+            setPaymentToast(data.message || 'Unable to verify Flutterwave transaction.');
+            setRoute('account');
+            return;
+          }
+
+          const orderRef = doc(db, 'orders', pending.orderId);
+          const orderSnap = await getDoc(orderRef);
+          if (!orderSnap.exists()) return;
+          const order = orderSnap.data() as Order;
+
+          const paidAmt = Math.round(data.amountNgn || pending.amountNgn);
+          const flwRef = data.reference || flwTxRef || String(flwTransactionId);
+          const payId = `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+          const receiptNumber = `RCP-${String(Date.now()).slice(-7)}`;
+
+          await setDoc(doc(db, 'payments', payId), {
+            id: payId,
+            receiptNumber,
+            reference: flwRef.slice(0, 120),
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            userId: user.uid,
+            customerName: order.customerName,
+            customerEmail: order.customerEmail,
+            amountNgn: paidAmt,
+            method: 'flutterwave',
+            channel: data.channel || 'Flutterwave Online',
+            status: 'VERIFIED',
+            instalmentNumber: pending.instalmentNumber || 1,
+            notes: 'Server-verified Flutterwave payment',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          const totalNgn = Math.round(order.totalAmountNgn || 0);
+          const newPaid = Math.min(totalNgn, Math.round(order.amountPaidNgn || 0) + paidAmt);
+          const newOutstanding = Math.max(0, totalNgn - newPaid);
+          const fullyPaid = newOutstanding === 0;
+
+          let remainingCovered = newPaid;
+          const updatedSchedule: InstalmentScheduleItem[] | undefined = order.schedule?.map((item) => {
+            if (remainingCovered >= item.amountNgn) {
+              remainingCovered -= item.amountNgn;
+              return {
+                ...item,
+                status: 'PAID',
+                paidAt: item.paidAt || new Date().toISOString().split('T')[0],
+                paymentReference: item.paymentReference || flwRef,
+              };
+            }
+            return item;
+          });
+
+          const nextPending = updatedSchedule?.find((s) => s.status !== 'PAID');
+          const nextDueDate = fullyPaid ? '' : nextPending?.dueDate || order.nextPaymentDueDate || '';
+
+          await updateDoc(orderRef, {
+            amountPaidNgn: newPaid,
+            outstandingBalanceNgn: newOutstanding,
+            paymentStatus: fullyPaid ? 'FULLY_PAID' : 'PARTIALLY_PAID',
+            orderStatus: fullyPaid ? 'FULLY_PAID_AWAITING_DELIVERY' : 'IN_INSTALMENT',
+            ...(updatedSchedule ? { schedule: updatedSchedule } : {}),
+            nextPaymentDueDate: nextDueDate,
+            updatedAt: serverTimestamp(),
+          });
+
+          await logAndSendNotification({
+            userId: user.uid,
+            recipientEmail: order.customerEmail,
+            recipientPhone: order.customerPhone,
+            type: fullyPaid ? 'FULL_PAYMENT_COMPLETED' : 'PAYMENT_VERIFIED',
+            title: `Payment Confirmed (${receiptNumber})`,
+            message: fullyPaid
+              ? `Your Flutterwave payment of ${formatNgn(paidAmt)} is verified. Order ${order.orderNumber} is now FULLY PAID – AWAITING DELIVERY.`
+              : `Your Flutterwave instalment payment of ${formatNgn(paidAmt)} is verified. Remaining balance: ${formatNgn(newOutstanding)}.`,
+            orderId: order.id,
+          });
+
+          setPaymentToast(
+            `Payment verified (${receiptNumber}). Order ${order.orderNumber} updated.`
+          );
+          setRoute('account');
+        } catch (err) {
+          setPaymentToast(err instanceof Error ? err.message : 'Flutterwave verification error.');
+        }
+      })();
+    }
   }, [authReady, user]);
 
   const handleNavigate = (nextRoute: PageRoute, section?: string) => {
@@ -248,9 +389,9 @@ function AppShell() {
         {route === 'admin' && <AdminDashboardPage onNavigate={handleNavigate} />}
       </main>
 
-      <Footer onNavigate={handleNavigate} />
+      <Footer currentRoute={route} onNavigate={handleNavigate} />
       <CartDrawer onNavigate={handleNavigate} />
-      <WhatsAppWidget />
+      {route !== 'admin' && <WhatsAppWidget />}
     </div>
   );
 }

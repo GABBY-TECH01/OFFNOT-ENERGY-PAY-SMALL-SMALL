@@ -56,6 +56,19 @@ export function ServicesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSubmitted(false);
+    if (!name.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+    if (phone.trim().length < 5) {
+      setError('Please enter a valid phone number (at least 5 digits).');
+      return;
+    }
+    if (message.trim().length < 5) {
+      setError('Please enter project details (at least 5 characters).');
+      return;
+    }
     setSubmitting(true);
     try {
       await submitInquiry({ name, email, phone, branch, serviceType, message });

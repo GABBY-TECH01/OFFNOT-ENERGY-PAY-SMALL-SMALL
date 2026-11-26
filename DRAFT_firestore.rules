@@ -32,10 +32,7 @@ service cloud.firestore {
     }
 
     function isBootstrappedSuperAdmin() {
-      return isVerified() && (
-        request.auth.token.email == 'francisgabriel932@gmail.com' ||
-        request.auth.token.email == 'offnotenergy@gmail.com'
-      );
+      return isVerified() && request.auth.token.email == 'francisgabriel932@gmail.com';
     }
 
     function staffDocExists() {
@@ -51,11 +48,11 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isBootstrappedSuperAdmin() || (isActiveStaff() && (staffData().role == 'super_admin' || staffData().role == 'ceo'));
+      return isBootstrappedSuperAdmin() || (isActiveStaff() && staffData().role == 'super_admin');
     }
 
     function isManagerOrAbove() {
-      return isSuperAdmin() || (isActiveStaff() && (staffData().role == 'managing_director' || staffData().role == 'manager'));
+      return isSuperAdmin() || (isActiveStaff() && (staffData().role == 'ceo' || staffData().role == 'managing_director' || staffData().role == 'manager'));
     }
 
     function isAccountsOrAbove() {
@@ -309,7 +306,7 @@ service cloud.firestore {
 
     function isValidStoreSetting(data) {
       return data.keys().hasAll(['id', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'allowedDurations', 'defaultInitialDepositPercent', 'defaultAdminChargePercent', 'gracePeriodDays', 'bankName', 'bankAccountName', 'bankAccountNumber', 'instalmentTerms', 'warrantyPolicy', 'returnPolicy', 'privacyPolicy', 'termsAndConditions', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'allowedDurations', 'defaultInitialDepositPercent', 'defaultAdminChargePercent', 'gracePeriodDays', 'bankName', 'bankAccountName', 'bankAccountNumber', 'instalmentTerms', 'warrantyPolicy', 'returnPolicy', 'privacyPolicy', 'termsAndConditions', 'autoHappyNewMonth', 'happyNewMonthMessage', 'lastNewMonthSent', 'updatedAt'])
         && isValidId(data.id)
         && (!('allowedDurations' in data) || (data.allowedDurations is list && data.allowedDurations.size() >= 1 && data.allowedDurations.size() <= 5 && data.allowedDurations[0] is number))
         && (!('defaultInitialDepositPercent' in data) || (data.defaultInitialDepositPercent is number && data.defaultInitialDepositPercent >= 0 && data.defaultInitialDepositPercent <= 90))
@@ -323,6 +320,9 @@ service cloud.firestore {
         && (!('returnPolicy' in data) || isValidString(data.returnPolicy, 0, 5000))
         && (!('privacyPolicy' in data) || isValidString(data.privacyPolicy, 0, 5000))
         && (!('termsAndConditions' in data) || isValidString(data.termsAndConditions, 0, 5000))
+        && (!('autoHappyNewMonth' in data) || data.autoHappyNewMonth is bool)
+        && (!('happyNewMonthMessage' in data) || isValidString(data.happyNewMonthMessage, 0, 2000))
+        && (!('lastNewMonthSent' in data) || isValidString(data.lastNewMonthSent, 0, 20))
         && data.updatedAt is timestamp;
     }
 
@@ -343,6 +343,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'defaultAddress', 'defaultCity', 'defaultState', 'updatedAt']);
+      allow delete: if isValidId(userId) && isSuperAdmin() && request.auth.uid != userId;
 
       match /addresses/{addressId} {
         allow get: if isValidId(userId) && isValidId(addressId) && (isOwner(userId) || isActiveStaff());
@@ -359,7 +360,7 @@ service cloud.firestore {
           && incoming().userId == existing().userId
           && incoming().createdAt == existing().createdAt
           && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'recipientName', 'phone', 'streetAddress', 'city', 'state', 'landmark', 'lat', 'lng', 'isDefault']);
-        allow delete: if isValidId(userId) && isValidId(addressId) && isOwner(userId);
+        allow delete: if isValidId(userId) && isValidId(addressId) && (isOwner(userId) || isSuperAdmin());
       }
     }
 
@@ -381,7 +382,7 @@ service cloud.firestore {
       allow delete: if isValidId(staffId) && isSuperAdmin();
     }
 
-    // 3. Role Permissions Matrix
+    // 3. Role Permissions Matrix (Super Admin Only)
     match /rolePermissions/{roleId} {
       allow get: if isValidId(roleId) && isActiveStaff();
       allow list: if isActiveStaff();
@@ -469,7 +470,7 @@ service cloud.firestore {
             && incoming().amountPaidNgn == existing().amountPaidNgn
             && incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'updatedAt']))
           ||
-          // Customer gateway verified payment update (requires payment record created in same transaction/batch or matching full/instalment transition, delivery remains false until staff schedules, or transitions to FULLY_PAID_AWAITING_DELIVERY when paid in full)
+          // Customer gateway verified payment update
           (existing().userId == request.auth.uid
             && existing().approvalStatus in ['NOT_REQUIRED', 'APPROVED']
             && incoming().amountPaidNgn > existing().amountPaidNgn
@@ -500,16 +501,30 @@ service cloud.firestore {
               ||
               // Schedule delivery & installation ONLY when fully paid (or already overridden)
               (isSalesOrAbove()
-                && (existing().outstandingBalanceNgn == 0 || existing().overrideApplied == true)
+                && (existing().outstandingBalanceNgn == 0 || ('overrideApplied' in existing() && existing().overrideApplied == true))
                 && incoming().orderStatus in ['FULLY_PAID_AWAITING_DELIVERY', 'SCHEDULED_FOR_INSTALLATION', 'COMPLETED']
                 && incoming().diff(existing()).affectedKeys().hasOnly(['deliveryAuthorized', 'orderStatus', 'deliveryScheduledDate', 'installationScheduledDate', 'completedAt', 'updatedAt']))
               ||
               // Super Admin Authorised Management Override with mandatory reason + audit log
               (isSuperAdmin()
+                && 'overrideApplied' in incoming()
                 && incoming().overrideApplied == true
+                && 'overrideReason' in incoming()
                 && isValidString(incoming().overrideReason, 10, 500)
+                && 'overrideBy' in incoming()
                 && isValidString(incoming().overrideBy, 3, 160)
                 && incoming().diff(existing()).affectedKeys().hasOnly(['overrideApplied', 'overrideBy', 'overrideReason', 'deliveryAuthorized', 'orderStatus', 'deliveryScheduledDate', 'installationScheduledDate', 'updatedAt']))
+              ||
+              // Super Admin administrative order management (strictly preserves Pay-Before-Delivery unless explicit override is recorded)
+              (isSuperAdmin()
+                && (incoming().deliveryAuthorized == false
+                    || existing().outstandingBalanceNgn == 0
+                    || ('overrideApplied' in incoming()
+                        && incoming().overrideApplied == true
+                        && 'overrideReason' in incoming()
+                        && isValidString(incoming().overrideReason, 10, 500)
+                        && 'overrideBy' in incoming()
+                        && isValidString(incoming().overrideBy, 3, 160))))
             ))
         );
     }

@@ -14,6 +14,168 @@ const isProduction = process.env.NODE_ENV === 'production';
 // Prevent duplicate transaction replay within server runtime
 const processedReferences = new Set<string>();
 
+interface FirebaseAppletConfig {
+  projectId?: string;
+  firestoreDatabaseId?: string;
+}
+
+let firebaseConfig: FirebaseAppletConfig = {};
+try {
+  const rawCfg = fs.readFileSync(path.resolve(__dirname, 'firebase-applet-config.json'), 'utf8');
+  firebaseConfig = JSON.parse(rawCfg) as FirebaseAppletConfig;
+} catch {
+  firebaseConfig = {};
+}
+
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID?.trim() || firebaseConfig.projectId || '';
+const FIRESTORE_DATABASE_ID =
+  process.env.FIRESTORE_DATABASE_ID?.trim() || firebaseConfig.firestoreDatabaseId || '(default)';
+
+let cachedCerts: { certs: Record<string, string>; expiresAt: number } | null = null;
+
+async function getFirebasePublicCerts(): Promise<Record<string, string>> {
+  if (cachedCerts && Date.now() < cachedCerts.expiresAt) {
+    return cachedCerts.certs;
+  }
+  const resp = await fetch(
+    'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
+  );
+  if (!resp.ok) {
+    throw new Error('Failed to fetch Firebase public certificates.');
+  }
+  const cacheControl = resp.headers.get('cache-control') || '';
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
+  const maxAgeSec = maxAgeMatch ? Number(maxAgeMatch[1]) : 3600;
+  const certs = (await resp.json()) as Record<string, string>;
+  cachedCerts = { certs, expiresAt: Date.now() + maxAgeSec * 1000 };
+  return certs;
+}
+
+function decodeBase64UrlJson<T>(segment: string): T {
+  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');
+  const padLen = (4 - (normalized.length % 4)) % 4;
+  const padded = normalized + '='.repeat(padLen);
+  return JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as T;
+}
+
+interface VerifiedFirebaseUser {
+  uid: string;
+  email: string;
+  emailVerified: boolean;
+}
+
+async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseUser> {
+  if (!FIREBASE_PROJECT_ID) {
+    throw new Error('Firebase projectId is not configured on the server.');
+  }
+  const parts = idToken.split('.');
+  if (parts.length !== 3) {
+    throw new Error('Malformed Firebase ID token.');
+  }
+  const [headerB64, payloadB64, sigB64] = parts;
+  const header = decodeBase64UrlJson<{ alg?: string; kid?: string }>(headerB64);
+  if (header.alg !== 'RS256' || typeof header.kid !== 'string' || !header.kid) {
+    throw new Error('Invalid Firebase ID token algorithm or key ID.');
+  }
+
+  const certs = await getFirebasePublicCerts();
+  const certPem = certs[header.kid];
+  if (!certPem) {
+    throw new Error('Signing certificate not found for token.');
+  }
+
+  const normalizedSig = sigB64.replace(/-/g, '+').replace(/_/g, '/');
+  const sigPad = (4 - (normalizedSig.length % 4)) % 4;
+  const signature = Buffer.from(normalizedSig + '='.repeat(sigPad), 'base64');
+
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(`${headerB64}.${payloadB64}`);
+  verifier.end();
+  if (!verifier.verify(certPem, signature)) {
+    throw new Error('Invalid Firebase ID token signature.');
+  }
+
+  const payload = decodeBase64UrlJson<{
+    aud?: string;
+    iss?: string;
+    sub?: string;
+    exp?: number;
+    iat?: number;
+    email?: string;
+    email_verified?: boolean;
+  }>(payloadB64);
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (payload.aud !== FIREBASE_PROJECT_ID) {
+    throw new Error('Token audience mismatch.');
+  }
+  if (payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`) {
+    throw new Error('Token issuer mismatch.');
+  }
+  if (typeof payload.sub !== 'string' || !payload.sub || payload.sub.length > 128) {
+    throw new Error('Invalid token subject.');
+  }
+  if (typeof payload.exp !== 'number' || payload.exp <= nowSec) {
+    throw new Error('Firebase ID token has expired.');
+  }
+  if (typeof payload.iat !== 'number' || payload.iat > nowSec + 300) {
+    throw new Error('Token issued-at timestamp is invalid.');
+  }
+
+  return {
+    uid: payload.sub,
+    email: typeof payload.email === 'string' ? payload.email : '',
+    emailVerified: Boolean(payload.email_verified),
+  };
+}
+
+async function verifyAuthorizedStaffFromRequest(
+  req: Request
+): Promise<{ uid: string; email: string; role: string }> {
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    throw new Error('UNAUTHORIZED:Missing Bearer authentication token.');
+  }
+  const idToken = authHeader.slice(7).trim();
+  if (!idToken) {
+    throw new Error('UNAUTHORIZED:Empty authentication token.');
+  }
+
+  const verifiedUser = await verifyFirebaseIdToken(idToken);
+  if (
+    verifiedUser.email.toLowerCase() === 'francisgabriel932@gmail.com' &&
+    verifiedUser.emailVerified
+  ) {
+    return { uid: verifiedUser.uid, email: verifiedUser.email, role: 'super_admin' };
+  }
+
+  // Verify active management/super_admin role directly from Firestore REST API using caller's token
+  const docUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
+    FIREBASE_PROJECT_ID
+  )}/databases/${encodeURIComponent(FIRESTORE_DATABASE_ID)}/documents/staff/${encodeURIComponent(
+    verifiedUser.uid
+  )}`;
+  const staffRes = await fetch(docUrl, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!staffRes.ok) {
+    throw new Error('FORBIDDEN:Authorized management or Super Admin account required.');
+  }
+  const staffDoc = (await staffRes.json()) as {
+    fields?: {
+      active?: { booleanValue?: boolean };
+      role?: { stringValue?: string };
+    };
+  };
+  const isActive = staffDoc.fields?.active?.booleanValue === true;
+  const role = staffDoc.fields?.role?.stringValue || '';
+  if (!isActive || !['super_admin', 'ceo', 'managing_director', 'manager'].includes(role)) {
+    throw new Error('FORBIDDEN:Insufficient role permissions for bulk customer broadcasts.');
+  }
+
+  return { uid: verifiedUser.uid, email: verifiedUser.email, role };
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -87,6 +249,11 @@ async function createServer() {
       const reference = `OFFNOT-PSK-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       const amountKobo = Math.round(amountNgn * 100);
 
+      const safeCallbackUrl =
+        typeof callbackUrl === 'string' && /^https?:\/\//i.test(callbackUrl)
+          ? callbackUrl
+          : undefined;
+
       const response = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -98,7 +265,7 @@ async function createServer() {
           amount: amountKobo,
           currency: 'NGN',
           reference,
-          callback_url: typeof callbackUrl === 'string' && callbackUrl.startsWith('http') ? callbackUrl : undefined,
+          callback_url: safeCallbackUrl,
           channels: ['card', 'bank', 'ussd', 'bank_transfer'],
           metadata: {
             orderId,
@@ -131,6 +298,94 @@ async function createServer() {
     } catch (error) {
       console.error('Paystack initialize error:', error);
       res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to initialize payment.' });
+    }
+  });
+
+  // Flutterwave Payment Initialization
+  app.post('/api/payments/flutterwave/initialize', async (req: Request, res: Response) => {
+    try {
+      const { email, customerName, amountNgn, orderId, orderNumber, instalmentNumber, callbackUrl } =
+        req.body ?? {};
+      if (!isValidEmail(email)) {
+        res.status(400).json({ error: 'INVALID_EMAIL', message: 'Valid customer email is required.' });
+        return;
+      }
+      if (typeof amountNgn !== 'number' || !Number.isFinite(amountNgn) || amountNgn <= 0) {
+        res
+          .status(400)
+          .json({ error: 'INVALID_AMOUNT', message: 'Payment amount must be greater than zero.' });
+        return;
+      }
+      if (typeof orderId !== 'string' || !orderId.trim()) {
+        res.status(400).json({ error: 'INVALID_ORDER', message: 'Order ID is required.' });
+        return;
+      }
+
+      const secretKey = process.env.FLUTTERWAVE_SECRET_KEY?.trim();
+      if (!secretKey) {
+        res.status(503).json({
+          error: 'FLUTTERWAVE_NOT_CONFIGURED',
+          message:
+            'Flutterwave secret credentials are not configured yet. Set FLUTTERWAVE_SECRET_KEY and VITE_FLUTTERWAVE_PUBLIC_KEY in environment secrets, or submit a Direct Bank Transfer reference.',
+        });
+        return;
+      }
+
+      const txRef = `OFFNOT-FLW-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+      const safeRedirect =
+        typeof callbackUrl === 'string' && /^https?:\/\//i.test(callbackUrl)
+          ? callbackUrl
+          : undefined;
+
+      const response = await fetch('https://api.flutterwave.com/v3/payments', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tx_ref: txRef,
+          amount: Math.round(amountNgn),
+          currency: 'NGN',
+          redirect_url: safeRedirect,
+          customer: {
+            email,
+            name: typeof customerName === 'string' && customerName.trim() ? customerName.trim().slice(0, 120) : 'OFFNOT Customer',
+          },
+          meta: {
+            orderId,
+            orderNumber: typeof orderNumber === 'string' ? orderNumber : '',
+            instalmentNumber: typeof instalmentNumber === 'number' ? instalmentNumber : 1,
+            merchant: 'OFFNOT ENERGY',
+          },
+          customizations: {
+            title: 'OFFNOT ENERGY',
+            description: `Solar Order ${typeof orderNumber === 'string' ? orderNumber : orderId}`,
+          },
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        status?: string;
+        message?: string;
+        data?: { link?: string };
+      };
+
+      if (!response.ok || payload.status !== 'success' || !payload.data?.link) {
+        res.status(502).json({
+          error: 'FLUTTERWAVE_INIT_FAILED',
+          message: payload.message || 'Unable to initialize Flutterwave transaction.',
+        });
+        return;
+      }
+
+      res.json({
+        reference: txRef,
+        authorizationUrl: payload.data.link,
+      });
+    } catch (error) {
+      console.error('Flutterwave initialize error:', error);
+      res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to initialize Flutterwave payment.' });
     }
   });
 
@@ -345,6 +600,148 @@ async function createServer() {
     } catch (error) {
       console.error('Notification dispatch error:', error);
       res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Notification dispatch failed.' });
+    }
+  });
+
+  // Authenticated Bulk Customer Broadcast (Happy New Month & New Product Announcements)
+  app.post('/api/notifications/broadcast', async (req: Request, res: Response) => {
+    try {
+      try {
+        await verifyAuthorizedStaffFromRequest(req);
+      } catch (authErr) {
+        const msg = authErr instanceof Error ? authErr.message : 'Unauthorized';
+        if (msg.startsWith('FORBIDDEN:')) {
+          res.status(403).json({ error: 'FORBIDDEN', message: msg.replace(/^FORBIDDEN:/, '') });
+          return;
+        }
+        res.status(401).json({
+          error: 'UNAUTHORIZED',
+          message: msg.replace(/^UNAUTHORIZED:/, ''),
+        });
+        return;
+      }
+
+      const { subject, message, campaignType, recipients } = req.body ?? {};
+      if (typeof subject !== 'string' || !subject.trim() || subject.trim().length > 160) {
+        res.status(400).json({ error: 'INVALID_SUBJECT', message: 'Subject (1–160 chars) is required.' });
+        return;
+      }
+      if (typeof message !== 'string' || !message.trim() || message.trim().length > 4000) {
+        res.status(400).json({ error: 'INVALID_MESSAGE', message: 'Message body (1–4000 chars) is required.' });
+        return;
+      }
+      const allowedTypes = ['happy_new_month', 'new_product', 'announcement'];
+      const safeType =
+        typeof campaignType === 'string' && allowedTypes.includes(campaignType)
+          ? campaignType
+          : 'announcement';
+
+      if (!Array.isArray(recipients) || recipients.length === 0) {
+        res.status(400).json({ error: 'NO_RECIPIENTS', message: 'At least one customer email recipient is required.' });
+        return;
+      }
+
+      const seenEmails = new Set<string>();
+      const validRecipients: { email: string; name: string }[] = [];
+      for (const item of recipients.slice(0, 500)) {
+        if (!item || typeof item !== 'object') continue;
+        const rawEmail = (item as { email?: unknown }).email;
+        const rawName = (item as { name?: unknown }).name;
+        if (isValidEmail(rawEmail)) {
+          const normalized = rawEmail.trim().toLowerCase();
+          if (!seenEmails.has(normalized)) {
+            seenEmails.add(normalized);
+            validRecipients.push({
+              email: rawEmail.trim(),
+              name: typeof rawName === 'string' && rawName.trim() ? rawName.trim().slice(0, 120) : 'Valued Customer',
+            });
+          }
+        }
+      }
+
+      if (validRecipients.length === 0) {
+        res.status(400).json({ error: 'NO_VALID_EMAILS', message: 'No valid customer email addresses were provided.' });
+        return;
+      }
+
+      const resendKey = process.env.RESEND_API_KEY?.trim();
+      const fromEmail =
+        process.env.NOTIFICATION_FROM_EMAIL?.trim() || 'OFFNOT ENERGY <onboarding@resend.dev>';
+
+      if (!resendKey) {
+        res.json({
+          ok: true,
+          emailConfigured: false,
+          sentCount: 0,
+          failedCount: 0,
+          totalRecipients: validRecipients.length,
+          note: 'RESEND_API_KEY is not configured yet; in-app notifications have been logged for customers.',
+        });
+        return;
+      }
+
+      const safeSubject = subject.trim().slice(0, 160);
+      const badgeLabel =
+        safeType === 'happy_new_month'
+          ? 'HAPPY NEW MONTH'
+          : safeType === 'new_product'
+            ? 'NEW SOLAR ARRIVAL'
+            : 'CUSTOMER ANNOUNCEMENT';
+
+      let sentCount = 0;
+      let failedCount = 0;
+      let lastProviderError = '';
+
+      // Send in Resend batch chunks of up to 100 emails
+      for (let i = 0; i < validRecipients.length; i += 100) {
+        const chunk = validRecipients.slice(i, i + 100);
+        const batchPayload = chunk.map((recipient) => ({
+          from: fromEmail,
+          to: [recipient.email],
+          subject: safeSubject,
+          html: `<div style="font-family:sans-serif;max-width:620px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
+            <div style="display:inline-block;padding:4px 10px;border-radius:6px;background:#ecfdf5;color:#15803d;font-size:11px;font-weight:700;letter-spacing:0.06em;margin-bottom:12px;">${badgeLabel}</div>
+            <h2 style="color:#0f172a;margin:0 0 12px 0;">OFFNOT ENERGY</h2>
+            <p style="color:#334155;font-size:14px;margin:0 0 12px 0;">Dear ${escapeHtml(recipient.name)},</p>
+            <p style="color:#334155;font-size:15px;line-height:1.65;margin:0 0 16px 0;">${escapeHtml(message.trim()).replace(/\n/g, '<br/>')}</p>
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;"/>
+            <p style="color:#64748b;font-size:12px;margin:0;">Clean Energy, Stronger Tomorrow · Dugbe &amp; Dalute Branches, Ibadan, Oyo State<br/>Customer Service: 07047053453 · offnotenergy@gmail.com</p>
+          </div>`,
+        }));
+
+        const batchRes = await fetch('https://api.resend.com/emails/batch', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(batchPayload),
+        });
+
+        if (batchRes.ok) {
+          sentCount += chunk.length;
+        } else {
+          failedCount += chunk.length;
+          try {
+            const errJson = (await batchRes.json()) as { message?: string };
+            if (errJson.message) lastProviderError = errJson.message;
+          } catch {
+            // ignore JSON parse failure
+          }
+        }
+      }
+
+      res.json({
+        ok: true,
+        emailConfigured: true,
+        sentCount,
+        failedCount,
+        totalRecipients: validRecipients.length,
+        ...(lastProviderError ? { note: lastProviderError } : {}),
+      });
+    } catch (error) {
+      console.error('Broadcast dispatch error:', error);
+      res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Bulk broadcast failed.' });
     }
   });
 

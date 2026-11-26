@@ -314,6 +314,9 @@ export interface StoreSetting {
   returnPolicy: string;
   privacyPolicy: string;
   termsAndConditions: string;
+  autoHappyNewMonth?: boolean;
+  happyNewMonthMessage?: string;
+  lastNewMonthSent?: string;
   updatedAt?: unknown;
 }
 

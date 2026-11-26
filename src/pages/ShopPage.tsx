@@ -12,7 +12,7 @@ interface ShopPageProps {
 
 export function ShopPage({ onNavigate }: ShopPageProps) {
   const { products, usingDemoCatalog } = useStore();
-  const { addToCart, setCheckoutMode } = useCart();
+  const { addToCart, setCheckoutMode, setDrawerOpen } = useCart();
 
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | ProductCategory>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,7 +42,8 @@ export function ShopPage({ onNavigate }: ShopPageProps) {
   }, [products, selectedCategory, searchQuery, sortBy]);
 
   const handleBuyNow = (product: Product) => {
-    addToCart(product, 1);
+    addToCart(product, 1, false);
+    setDrawerOpen(false);
     setCheckoutMode('cart');
     onNavigate('checkout');
   };
@@ -246,7 +247,7 @@ export function ShopPage({ onNavigate }: ShopPageProps) {
                 {detailProduct.warranty && (
                   <p className="text-xs text-slate-500">Warranty: {detailProduct.warranty}</p>
                 )}
-                <div className="pt-2 flex gap-2.5">
+                <div className="pt-2 flex flex-wrap gap-2.5">
                   <button
                     type="button"
                     disabled={detailProduct.stock <= 0 || detailProduct.priceNgn <= 0}
@@ -254,14 +255,26 @@ export function ShopPage({ onNavigate }: ShopPageProps) {
                       addToCart(detailProduct, 1);
                       setDetailProduct(null);
                     }}
-                    className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+                    className="flex-1 py-2.5 px-3 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
                   >
                     Add to Cart
                   </button>
                   <button
                     type="button"
+                    disabled={detailProduct.stock <= 0 || detailProduct.priceNgn <= 0}
+                    onClick={() => {
+                      const prod = detailProduct;
+                      setDetailProduct(null);
+                      handleBuyNow(prod);
+                    }}
+                    className="flex-1 py-2.5 px-3 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+                  >
+                    Buy Now
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setDetailProduct(null)}
-                    className="px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 cursor-pointer"
+                    className="px-4 py-2.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
                   >
                     Close
                   </button>

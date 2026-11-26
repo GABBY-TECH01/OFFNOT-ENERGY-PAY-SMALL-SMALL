@@ -290,6 +290,9 @@
         "returnPolicy": { "type": "string", "maxLength": 5000 },
         "privacyPolicy": { "type": "string", "maxLength": 5000 },
         "termsAndConditions": { "type": "string", "maxLength": 5000 },
+        "autoHappyNewMonth": { "type": "boolean" },
+        "happyNewMonthMessage": { "type": "string", "maxLength": 2000 },
+        "lastNewMonthSent": { "type": "string", "maxLength": 20 },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "updatedAt"]

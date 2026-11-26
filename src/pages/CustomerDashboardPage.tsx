@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Bell,
@@ -57,10 +57,16 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
   const [selectedReceipt, setSelectedReceipt] = useState<PaymentRecord | null>(null);
   const [payOrderModal, setPayOrderModal] = useState<Order | null>(null);
   const [payAmountNgn, setPayAmountNgn] = useState<number>(0);
-  const [payMethod, setPayMethod] = useState<'paystack' | 'bank_transfer'>('bank_transfer');
+  const [payMethod, setPayMethod] = useState<'paystack' | 'flutterwave' | 'bank_transfer'>(
+    'bank_transfer'
+  );
   const [transferRef, setTransferRef] = useState('');
   const [payBusy, setPayBusy] = useState(false);
   const [payMsg, setPayMsg] = useState('');
+
+  const [confirmCancelOrderId, setConfirmCancelOrderId] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [orderActionMsg, setOrderActionMsg] = useState('');
 
   // Profile form state
   const [pName, setPName] = useState(profile?.displayName || user?.displayName || '');
@@ -68,7 +74,9 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
   const [pAddress, setPAddress] = useState(profile?.defaultAddress || '');
   const [pCity, setPCity] = useState(profile?.defaultCity || 'Ibadan');
   const [pState, setPState] = useState(profile?.defaultState || 'Oyo State');
+  const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   // Address form
   const [addrLabel, setAddrLabel] = useState('Home');
@@ -77,13 +85,30 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
   const [addrStreet, setAddrStreet] = useState('');
   const [addrCity, setAddrCity] = useState('Ibadan');
   const [addrState, setAddrState] = useState('Oyo State');
+  const [addrBusy, setAddrBusy] = useState(false);
+  const [addrError, setAddrError] = useState('');
+  const [addrSuccess, setAddrSuccess] = useState('');
 
   // Review form
   const [revLocation, setRevLocation] = useState('Ibadan, Oyo State');
   const [revProduct, setRevProduct] = useState('OFFNOT 4KVA SOLAR PACKAGE');
   const [revRating, setRevRating] = useState(5);
   const [revQuote, setRevQuote] = useState('');
+  const [revBusy, setRevBusy] = useState(false);
   const [revSubmitted, setRevSubmitted] = useState(false);
+  const [revError, setRevError] = useState('');
+
+  // Sync profile fields when Firestore profile loads asynchronously
+  useEffect(() => {
+    if (!profile) return;
+    setPName((prev) => prev || profile.displayName || '');
+    setPPhone((prev) => prev || profile.phone || '');
+    setPAddress((prev) => prev || profile.defaultAddress || '');
+    setPCity((prev) => prev || profile.defaultCity || 'Ibadan');
+    setPState((prev) => prev || profile.defaultState || 'Oyo State');
+    setAddrRecipient((prev) => prev || profile.displayName || '');
+    setAddrPhone((prev) => prev || profile.phone || '');
+  }, [profile]);
 
   if (!user) {
     return (
@@ -123,7 +148,13 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
     setPayAmountNgn(
       nextPending ? Math.min(order.outstandingBalanceNgn, nextPending.amountNgn) : order.outstandingBalanceNgn
     );
-    setPayMethod(gatewayConfig.paystackConfigured ? 'paystack' : 'bank_transfer');
+    setPayMethod(
+      gatewayConfig.paystackConfigured
+        ? 'paystack'
+        : gatewayConfig.flutterwaveConfigured
+          ? 'flutterwave'
+          : 'bank_transfer'
+    );
     setTransferRef('');
     setPayMsg('');
   };
@@ -133,10 +164,14 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
     if (!payOrderModal) return;
     setPayMsg('');
 
-    if (payAmountNgn <= 0 || payAmountNgn > payOrderModal.outstandingBalanceNgn) {
+    const roundedPayAmount = Math.round(payAmountNgn);
+    if (roundedPayAmount <= 0 || roundedPayAmount > payOrderModal.outstandingBalanceNgn) {
       setPayMsg('Payment amount must be greater than ₦0 and not exceed the outstanding balance.');
       return;
     }
+
+    const nextPendingIdx = payOrderModal.schedule?.findIndex((s) => s.status === 'PENDING') ?? 0;
+    const instalmentNumber = nextPendingIdx >= 0 ? nextPendingIdx + 1 : 1;
 
     setPayBusy(true);
     try {
@@ -146,11 +181,10 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: user.email,
-            amountNgn: payAmountNgn,
+            amountNgn: roundedPayAmount,
             orderId: payOrderModal.id,
             orderNumber: payOrderModal.orderNumber,
-            instalmentNumber:
-              (payOrderModal.schedule?.findIndex((s) => s.status === 'PENDING') ?? 0) + 1,
+            instalmentNumber,
             callbackUrl: window.location.href,
           }),
         });
@@ -169,9 +203,46 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
             JSON.stringify({
               orderId: payOrderModal.id,
               orderNumber: payOrderModal.orderNumber,
-              amountNgn: payAmountNgn,
-              instalmentNumber:
-                (payOrderModal.schedule?.findIndex((s) => s.status === 'PENDING') ?? 0) + 1,
+              amountNgn: roundedPayAmount,
+              instalmentNumber,
+            })
+          );
+          window.location.assign(data.authorizationUrl);
+          return;
+        }
+      }
+
+      if (payMethod === 'flutterwave') {
+        const res = await fetch('/api/payments/flutterwave/initialize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: user.email,
+            customerName: payOrderModal.customerName,
+            amountNgn: roundedPayAmount,
+            orderId: payOrderModal.id,
+            orderNumber: payOrderModal.orderNumber,
+            instalmentNumber,
+            callbackUrl: window.location.href,
+          }),
+        });
+        const data = (await res.json()) as { authorizationUrl?: string; message?: string };
+        if (!res.ok) {
+          setPayMsg(
+            data.message ||
+              'Flutterwave keys are not configured yet. Please choose Direct Bank Transfer below.'
+          );
+          setPayBusy(false);
+          return;
+        }
+        if (data.authorizationUrl) {
+          sessionStorage.setItem(
+            'offnot_pending_flutterwave',
+            JSON.stringify({
+              orderId: payOrderModal.id,
+              orderNumber: payOrderModal.orderNumber,
+              amountNgn: roundedPayAmount,
+              instalmentNumber,
             })
           );
           window.location.assign(data.authorizationUrl);
@@ -185,8 +256,7 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
         return;
       }
 
-      const nextPendingIdx = payOrderModal.schedule?.findIndex((s) => s.status === 'PENDING') ?? 0;
-      const paymentId = `pay_${Date.now()}`;
+      const paymentId = `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       await setDoc(doc(db, 'payments', paymentId), {
         id: paymentId,
         receiptNumber: `RCP-${String(Date.now()).slice(-7)}`,
@@ -196,11 +266,11 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
         userId: user.uid,
         customerName: payOrderModal.customerName,
         customerEmail: payOrderModal.customerEmail,
-        amountNgn: payAmountNgn,
+        amountNgn: roundedPayAmount,
         method: 'bank_transfer',
         channel: 'Direct Bank Transfer',
         status: 'PENDING_VERIFICATION',
-        instalmentNumber: nextPendingIdx + 1,
+        instalmentNumber,
         notes: `Instalment transfer submitted by customer for ${payOrderModal.orderNumber}`,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -217,11 +287,12 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
         recipientPhone: payOrderModal.customerPhone,
         type: 'PAYMENT_SUBMITTED',
         title: `Transfer Proof Submitted (${payOrderModal.orderNumber})`,
-        message: `Your transfer of ${formatNgn(payAmountNgn)} (Ref: ${transferRef.trim()}) has been submitted for Accounts Staff verification.`,
+        message: `Your transfer of ${formatNgn(roundedPayAmount)} (Ref: ${transferRef.trim()}) has been submitted for Accounts Staff verification.`,
         orderId: payOrderModal.id,
       });
 
       setPayOrderModal(null);
+      setOrderActionMsg(`Transfer proof for ${payOrderModal.orderNumber} submitted for verification.`);
     } catch (err) {
       setPayMsg(err instanceof Error ? err.message : 'Unable to submit payment.');
     } finally {
@@ -229,42 +300,127 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
     }
   };
 
+  const handleCancelOrder = async (order: Order) => {
+    setOrderActionMsg('');
+    setCancelBusy(true);
+    try {
+      await updateDoc(doc(db, 'orders', order.id), {
+        orderStatus: 'CANCELLED',
+        updatedAt: serverTimestamp(),
+      });
+      setConfirmCancelOrderId(null);
+      setOrderActionMsg(`Order ${order.orderNumber} has been cancelled.`);
+    } catch (err) {
+      setOrderActionMsg('Unable to cancel order.');
+      handleFirestoreError(err, OperationType.UPDATE, `orders/${order.id}`);
+    } finally {
+      setCancelBusy(false);
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateUserProfile({
-      displayName: pName,
-      phone: pPhone,
-      defaultAddress: pAddress,
-      defaultCity: pCity,
-      defaultState: pState,
-    });
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 3000);
+    setProfileError('');
+    setProfileSaved(false);
+    if (!pName.trim()) {
+      setProfileError('Full name cannot be empty.');
+      return;
+    }
+    setProfileSaving(true);
+    try {
+      await updateUserProfile({
+        displayName: pName,
+        phone: pPhone,
+        defaultAddress: pAddress,
+        defaultCity: pCity,
+        defaultState: pState,
+      });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Unable to save profile.');
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addrStreet.trim()) return;
-    await addSavedAddress({
-      label: addrLabel,
-      recipientName: addrRecipient || profile?.displayName || 'Customer',
-      phone: addrPhone || profile?.phone || '08000000000',
-      streetAddress: addrStreet,
-      city: addrCity,
-      state: addrState,
-    });
-    setAddrStreet('');
+    setAddrError('');
+    setAddrSuccess('');
+    const recipient = (addrRecipient || profile?.displayName || '').trim();
+    const phone = (addrPhone || profile?.phone || '').trim();
+    const street = addrStreet.trim();
+    const city = addrCity.trim();
+    const state = addrState.trim();
+
+    if (!recipient) {
+      setAddrError('Recipient name is required.');
+      return;
+    }
+    if (phone.length < 5) {
+      setAddrError('Enter a valid phone number (at least 5 digits).');
+      return;
+    }
+    if (street.length < 3) {
+      setAddrError('Enter a valid street address (at least 3 characters).');
+      return;
+    }
+    if (!city || !state) {
+      setAddrError('City and state are required.');
+      return;
+    }
+
+    setAddrBusy(true);
+    try {
+      await addSavedAddress({
+        label: addrLabel.trim() || 'Home',
+        recipientName: recipient,
+        phone,
+        streetAddress: street,
+        city,
+        state,
+      });
+      setAddrStreet('');
+      setAddrSuccess('Delivery address saved.');
+      setTimeout(() => setAddrSuccess(''), 3000);
+    } catch (err) {
+      setAddrError(err instanceof Error ? err.message : 'Unable to save address.');
+    } finally {
+      setAddrBusy(false);
+    }
+  };
+
+  const handleDeleteAddress = async (addressId: string) => {
+    setAddrError('');
+    try {
+      await deleteSavedAddress(addressId);
+      setAddrSuccess('Address deleted.');
+      setTimeout(() => setAddrSuccess(''), 3000);
+    } catch (err) {
+      setAddrError(err instanceof Error ? err.message : 'Unable to delete address.');
+    }
   };
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!revQuote.trim()) return;
-    const id = `rev_${Date.now()}`;
+    setRevError('');
+    setRevSubmitted(false);
+    if (!revLocation.trim() || !revProduct.trim()) {
+      setRevError('Please enter your location and the package or product purchased.');
+      return;
+    }
+    if (revQuote.trim().length < 5) {
+      setRevError('Please write at least 5 characters for your review.');
+      return;
+    }
+    const id = `rev_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    setRevBusy(true);
     try {
       await setDoc(doc(db, 'reviews', id), {
         id,
         userId: user.uid,
-        customerName: profile?.displayName || user.displayName || 'Verified Customer',
+        customerName: (profile?.displayName || user.displayName || 'Verified Customer').trim().slice(0, 120),
         location: revLocation.trim().slice(0, 120),
         packageOrProduct: revProduct.trim().slice(0, 160),
         rating: revRating,
@@ -275,7 +431,10 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
       setRevSubmitted(true);
       setRevQuote('');
     } catch (err) {
+      setRevError('Unable to submit review.');
       handleFirestoreError(err, OperationType.CREATE, `reviews/${id}`);
+    } finally {
+      setRevBusy(false);
     }
   };
 
@@ -392,6 +551,11 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
       {(activeTab === 'overview' || activeTab === 'orders') && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-8 space-y-5">
+            {orderActionMsg && (
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-xs sm:text-sm font-medium text-emerald-900">
+                {orderActionMsg}
+              </div>
+            )}
             {customerOrders.length === 0 ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center space-y-3">
                 <Package className="w-10 h-10 text-slate-300 mx-auto" />
@@ -578,6 +742,37 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
                             : 'Complete Payment'}
                         </button>
                       )}
+                      {(order.orderStatus === 'PENDING_APPROVAL' ||
+                        order.orderStatus === 'AWAITING_PAYMENT') &&
+                        (order.amountPaidNgn || 0) === 0 &&
+                        (confirmCancelOrderId === order.id ? (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={cancelBusy}
+                              onClick={() => handleCancelOrder(order)}
+                              className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60 cursor-pointer"
+                            >
+                              {cancelBusy ? 'Cancelling...' : 'Confirm Cancel'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={cancelBusy}
+                              onClick={() => setConfirmCancelOrderId(null)}
+                              className="px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                            >
+                              Keep Order
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmCancelOrderId(order.id)}
+                            className="px-3.5 py-2.5 rounded-lg border border-red-200 text-red-700 text-xs font-bold hover:bg-red-50 cursor-pointer"
+                          >
+                            Cancel Order
+                          </button>
+                        ))}
                       {order.approvalStatus === 'PENDING_APPROVAL' && (
                         <span className="text-xs font-semibold text-amber-800">
                           Awaiting OFFNOT Management Approval before payment starts.
@@ -609,7 +804,7 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
                       className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs space-y-1"
                     >
                       <p className="font-bold text-slate-900">{n.title}</p>
-                      <p className="text-slate-600 leading-relaxed">{n.message}</p>
+                      <p className="text-slate-600 leading-relaxed whitespace-pre-line">{n.message}</p>
                     </div>
                   ))}
                 </div>
@@ -715,7 +910,7 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
                   </div>
                   <button
                     type="button"
-                    onClick={() => deleteSavedAddress(addr.id)}
+                    onClick={() => handleDeleteAddress(addr.id)}
                     className="p-2 text-slate-400 hover:text-red-600 cursor-pointer"
                     aria-label="Delete address"
                   >
@@ -734,6 +929,17 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
               <MapPin className="w-4 h-4 text-emerald-700" />
               Add New Address
             </h3>
+            {addrError && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+                {addrError}
+              </div>
+            )}
+            {addrSuccess && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                {addrSuccess}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <input
                 required
@@ -776,10 +982,11 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
             </div>
             <button
               type="submit"
-              className="w-full py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 inline-flex items-center justify-center gap-1.5 cursor-pointer"
+              disabled={addrBusy}
+              className="w-full py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-60 inline-flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              Save Delivery Address
+              {addrBusy ? 'Saving...' : 'Save Delivery Address'}
             </button>
           </form>
         </div>
@@ -792,6 +999,11 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
           className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6 space-y-4"
         >
           <h2 className="text-base font-bold text-slate-900">Update Profile Information</h2>
+          {profileError && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+              {profileError}
+            </div>
+          )}
           {profileSaved && (
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
@@ -839,9 +1051,10 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
           </div>
           <button
             type="submit"
-            className="px-5 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+            disabled={profileSaving}
+            className="px-5 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
           >
-            Save Profile
+            {profileSaving ? 'Saving...' : 'Save Profile'}
           </button>
         </form>
       )}
@@ -856,6 +1069,11 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
           <p className="text-xs text-slate-500">
             Submitted reviews are checked by management before appearing publicly on the homepage.
           </p>
+          {revError && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+              {revError}
+            </div>
+          )}
           {revSubmitted && (
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
               Thank you! Your review has been submitted for management approval.
@@ -906,9 +1124,10 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
           />
           <button
             type="submit"
-            className="px-5 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+            disabled={revBusy}
+            className="px-5 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
           >
-            Submit Review
+            {revBusy ? 'Submitting...' : 'Submit Review'}
           </button>
         </form>
       )}
@@ -965,6 +1184,21 @@ export function CustomerDashboardPage({ onNavigate }: CustomerDashboardPageProps
                   {gatewayConfig.paystackConfigured
                     ? 'Ready'
                     : 'Requires PAYSTACK_SECRET_KEY in Secrets'}
+                  )
+                </span>
+              </label>
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 cursor-pointer text-xs">
+                <input
+                  type="radio"
+                  checked={payMethod === 'flutterwave'}
+                  onChange={() => setPayMethod('flutterwave')}
+                  className="accent-emerald-700"
+                />
+                <span>
+                  <strong>Flutterwave Online</strong> (
+                  {gatewayConfig.flutterwaveConfigured
+                    ? 'Ready'
+                    : 'Requires FLUTTERWAVE_SECRET_KEY in Secrets'}
                   )
                 </span>
               </label>

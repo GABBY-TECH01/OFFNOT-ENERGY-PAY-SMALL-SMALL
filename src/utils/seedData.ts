@@ -1,4 +1,4 @@
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import type { Product, RolePermission, SolarPackage, StaffRole, StoreSetting } from '../types';
 
@@ -25,6 +25,10 @@ export const DEFAULT_STORE_SETTINGS: StoreSetting = {
     'OFFNOT ENERGY respects customer privacy. Personal contact details, saved Nigerian delivery addresses, and payment transaction references are stored securely to process orders, verify instalment schedules, coordinate installation in Ibadan and nationwide, and dispatch official payment receipts.',
   termsAndConditions:
     'All purchases on the OFFNOT ENERGY platform are governed by Nigerian commercial regulations and our strict PAY FULLY BEFORE DELIVERY AND INSTALLATION policy for instalment solar packages. Prices are denominated in Nigerian Naira (₦).',
+  autoHappyNewMonth: true,
+  happyNewMonthMessage:
+    'Happy New Month from OFFNOT ENERGY! Wishing you uninterrupted clean solar power, peace of mind, and great success all month long. Visit our Dugbe or Dalute branch in Ibadan or explore our latest solar packages and up to 5-month flexible instalment plans online.',
+  lastNewMonthSent: '',
 };
 
 export const DEMO_PACKAGES: SolarPackage[] = [
@@ -220,8 +224,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<StaffRole, RolePermission> = {
     canApproveInstalments: true,
     canVerifyPayments: true,
     canScheduleDelivery: true,
-    canOverrideDeliveryLock: true,
-    canManageStaff: true,
+    canOverrideDeliveryLock: false,
+    canManageStaff: false,
     canEditSettings: true,
   },
   managing_director: {
@@ -231,7 +235,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<StaffRole, RolePermission> = {
     canApproveInstalments: true,
     canVerifyPayments: true,
     canScheduleDelivery: true,
-    canOverrideDeliveryLock: true,
+    canOverrideDeliveryLock: false,
     canManageStaff: false,
     canEditSettings: true,
   },
@@ -283,48 +287,52 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<StaffRole, RolePermission> = {
 
 export async function seedInitialCatalogIfAdmin(): Promise<void> {
   try {
-    await setDoc(
-      doc(db, 'settings', 'storeConfig'),
-      {
-        ...DEFAULT_STORE_SETTINGS,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    for (const pkg of DEMO_PACKAGES) {
+    const configRef = doc(db, 'settings', 'storeConfig');
+    const configSnap = await getDoc(configRef);
+    if (!configSnap.exists()) {
       await setDoc(
-        doc(db, 'packages', pkg.id),
+        configRef,
         {
-          ...pkg,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: false }
-      );
-    }
-
-    for (const prod of DEMO_PRODUCTS) {
-      await setDoc(
-        doc(db, 'products', prod.id),
-        {
-          ...prod,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: false }
-      );
-    }
-
-    for (const [role, perms] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
-      await setDoc(
-        doc(db, 'rolePermissions', role),
-        {
-          ...perms,
+          ...DEFAULT_STORE_SETTINGS,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
+    }
+
+    for (const pkg of DEMO_PACKAGES) {
+      const pkgRef = doc(db, 'packages', pkg.id);
+      const pkgSnap = await getDoc(pkgRef);
+      if (!pkgSnap.exists()) {
+        await setDoc(pkgRef, {
+          ...pkg,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    for (const prod of DEMO_PRODUCTS) {
+      const prodRef = doc(db, 'products', prod.id);
+      const prodSnap = await getDoc(prodRef);
+      if (!prodSnap.exists()) {
+        await setDoc(prodRef, {
+          ...prod,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    for (const [role, perms] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
+      const roleRef = doc(db, 'rolePermissions', role);
+      const roleSnap = await getDoc(roleRef);
+      if (!roleSnap.exists()) {
+        await setDoc(roleRef, {
+          ...perms,
+          updatedAt: serverTimestamp(),
+        });
+      }
     }
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'seedInitialCatalog');

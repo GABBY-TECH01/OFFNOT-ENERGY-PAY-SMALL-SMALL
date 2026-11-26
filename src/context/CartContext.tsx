@@ -12,7 +12,7 @@ interface CartContextValue {
   subtotalNgn: number;
   isDrawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (product: Product, quantity?: number, openDrawer?: boolean) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
@@ -52,7 +52,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [items]);
 
-  const addToCart = (product: Product, quantity = 1) => {
+  const addToCart = (product: Product, quantity = 1, openDrawer = true) => {
     if (product.stock <= 0) return;
     setItems((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
@@ -62,7 +62,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       return [...prev, { product, quantity: Math.min(product.stock, Math.max(1, quantity)) }];
     });
-    setDrawerOpen(true);
+    if (openDrawer) {
+      setDrawerOpen(true);
+    }
   };
 
   const updateQuantity = (productId: string, quantity: number) => {

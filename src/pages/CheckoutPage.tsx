@@ -143,8 +143,16 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
     setError('');
     setGatewayMessage('');
 
-    if (!customerName.trim() || !customerPhone.trim() || !deliveryAddress.trim()) {
-      setError('Please complete your full name, phone number, and delivery address.');
+    if (!customerName.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+    if (customerPhone.trim().length < 5) {
+      setError('Please enter a valid phone number (at least 5 digits).');
+      return;
+    }
+    if (deliveryAddress.trim().length < 3) {
+      setError('Please enter a complete delivery street address.');
       return;
     }
     if (!acceptedPolicy) {
@@ -171,7 +179,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: user.email,
-            amountNgn: totalAmountNgn,
+            amountNgn: Math.round(totalAmountNgn),
             orderId,
             orderNumber,
             instalmentNumber: 1,
@@ -195,15 +203,19 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
           return;
         }
 
-        // Persist order as AWAITING_PAYMENT before redirecting user to Paystack hosted checkout
         await createOrderRecord(orderId, orderNumber, nowIso, 'UNPAID', 'AWAITING_PAYMENT');
+        if (!isPackageMode) {
+          clearCart();
+        } else {
+          setPackageSelection(null);
+        }
         if (initPayload.authorizationUrl) {
           sessionStorage.setItem(
             'offnot_pending_paystack',
             JSON.stringify({
               orderId,
               orderNumber,
-              amountNgn: totalAmountNgn,
+              amountNgn: Math.round(totalAmountNgn),
               instalmentNumber: 1,
             })
           );
@@ -212,13 +224,57 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
         }
       }
 
-      // 2. If Flutterwave is chosen for non-instalment full payment, check server configuration
-      if (!isInstalmentPackage && paymentMethod === 'flutterwave' && !gatewayConfig.flutterwaveConfigured) {
-        setGatewayMessage(
-          'Flutterwave merchant credentials (FLUTTERWAVE_SECRET_KEY & VITE_FLUTTERWAVE_PUBLIC_KEY) are not configured in environment secrets yet. Please select Direct Bank Transfer or configure secrets.'
-        );
-        setSubmitting(false);
-        return;
+      // 2. If Flutterwave is chosen for non-instalment full payment, initialize via backend
+      if (!isInstalmentPackage && paymentMethod === 'flutterwave') {
+        const initRes = await fetch('/api/payments/flutterwave/initialize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: user.email,
+            customerName: customerName.trim(),
+            amountNgn: Math.round(totalAmountNgn),
+            orderId,
+            orderNumber,
+            instalmentNumber: 1,
+            callbackUrl: window.location.href,
+          }),
+        });
+
+        const initPayload = (await initRes.json()) as {
+          error?: string;
+          message?: string;
+          authorizationUrl?: string;
+          reference?: string;
+        };
+
+        if (!initRes.ok) {
+          setGatewayMessage(
+            initPayload.message ||
+              'Flutterwave gateway credentials are not configured yet. You can submit via Direct Bank Transfer below for Accounts verification.'
+          );
+          setSubmitting(false);
+          return;
+        }
+
+        await createOrderRecord(orderId, orderNumber, nowIso, 'UNPAID', 'AWAITING_PAYMENT');
+        if (!isPackageMode) {
+          clearCart();
+        } else {
+          setPackageSelection(null);
+        }
+        if (initPayload.authorizationUrl) {
+          sessionStorage.setItem(
+            'offnot_pending_flutterwave',
+            JSON.stringify({
+              orderId,
+              orderNumber,
+              amountNgn: Math.round(totalAmountNgn),
+              instalmentNumber: 1,
+            })
+          );
+          window.location.assign(initPayload.authorizationUrl);
+          return;
+        }
       }
 
       // 3. Create Order in Firestore (Instalment application OR Direct Bank Transfer full order)
@@ -239,7 +295,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
 
       // If Direct Bank Transfer for full payment, create PENDING_VERIFICATION payment log
       if (!isInstalmentPackage && paymentMethod === 'bank_transfer') {
-        const paymentId = `pay_${Date.now()}`;
+        const paymentId = `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         await setDoc(doc(db, 'payments', paymentId), {
           id: paymentId,
           receiptNumber: `RCP-${String(Date.now()).slice(-7)}`,
@@ -249,7 +305,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
           userId: user.uid,
           customerName: customerName.trim().slice(0, 120),
           customerEmail: user.email || '',
-          amountNgn: totalAmountNgn,
+          amountNgn: Math.round(totalAmountNgn),
           method: 'bank_transfer',
           channel: 'Direct Bank Transfer',
           status: 'PENDING_VERIFICATION',
@@ -283,7 +339,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
       await logAndSendNotification({
         userId: user.uid,
         recipientEmail: user.email || '',
-        recipientPhone: customerPhone,
+        recipientPhone: customerPhone.trim(),
         type: isInstalmentPackage ? 'INSTALMENT_APPLICATION_RECEIVED' : 'ORDER_CONFIRMATION',
         title: isInstalmentPackage
           ? `Instalment Application Received (${orderNumber})`
@@ -310,6 +366,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
     orderStatus: Order['orderStatus']
   ) {
     if (!user) return;
+    const roundedTotal = Math.round(totalAmountNgn);
     try {
       const payload: Record<string, unknown> = {
         id: orderId,
@@ -319,17 +376,17 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
         customerEmail: user.email || '',
         customerPhone: customerPhone.trim().slice(0, 32),
         orderType: isPackageMode ? 'package_order' : 'product_order',
-        subtotalNgn: isPackageMode ? packageSelection!.pkg.priceNgn : subtotalNgn,
-        deliveryFeeNgn,
-        installationFeeNgn,
-        adminChargeNgn: isPackageMode ? pkgCalc!.adminChargeNgn : 0,
-        totalAmountNgn,
+        subtotalNgn: Math.round(isPackageMode ? packageSelection!.pkg.priceNgn : subtotalNgn),
+        deliveryFeeNgn: Math.round(deliveryFeeNgn),
+        installationFeeNgn: Math.round(installationFeeNgn),
+        adminChargeNgn: Math.round(isPackageMode ? pkgCalc!.adminChargeNgn : 0),
+        totalAmountNgn: roundedTotal,
         amountPaidNgn: 0,
-        outstandingBalanceNgn: totalAmountNgn,
+        outstandingBalanceNgn: roundedTotal,
         paymentPlan: isInstalmentPackage ? 'instalment' : 'full',
         durationMonths: isPackageMode ? packageSelection!.durationMonths : 1,
-        monthlyInstalmentNgn: isPackageMode ? pkgCalc!.monthlyInstalmentNgn : totalAmountNgn,
-        initialDepositNgn: isPackageMode ? pkgCalc!.initialDepositNgn : totalAmountNgn,
+        monthlyInstalmentNgn: Math.round(isPackageMode ? pkgCalc!.monthlyInstalmentNgn : roundedTotal),
+        initialDepositNgn: Math.round(isPackageMode ? pkgCalc!.initialDepositNgn : roundedTotal),
         approvalStatus: isInstalmentPackage ? 'PENDING_APPROVAL' : 'NOT_REQUIRED',
         paymentStatus,
         orderStatus,
@@ -345,7 +402,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
 
       if (isPackageMode && packageSelection) {
         payload.packageId = packageSelection.pkg.id;
-        payload.packageName = packageSelection.pkg.name;
+        payload.packageName = packageSelection.pkg.name.slice(0, 160);
         payload.schedule = pkgCalc!.schedule;
         payload.items = [];
       } else {

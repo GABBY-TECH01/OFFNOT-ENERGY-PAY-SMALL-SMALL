@@ -3,6 +3,8 @@ import {
   AlertCircle,
   CheckCircle2,
   ExternalLink,
+  Eye,
+  EyeOff,
   Lock,
   Mail,
   Shield,
@@ -36,11 +38,13 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [pendingRedirect, setPendingRedirect] = useState(false);
   const [showEmailEnableGuide, setShowEmailEnableGuide] = useState(false);
+  const [showPopupBlockedHelp, setShowPopupBlockedHelp] = useState(false);
 
   // Automatic Role-Based Redirection once auth + staff role snapshot resolve
   useEffect(() => {
@@ -52,6 +56,14 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
       onNavigate(isStaff ? 'admin' : 'account');
     }
   }, [authReady, staffLoading, user, isStaff, isBootstrapEmailUnverified, pendingRedirect, onNavigate]);
+
+  const switchMode = (nextMode: 'login' | 'register' | 'reset') => {
+    setMode(nextMode);
+    setError('');
+    setInfo('');
+    setShowEmailEnableGuide(false);
+    setShowPopupBlockedHelp(false);
+  };
 
   if (user && isBootstrapEmailUnverified) {
     return (
@@ -67,6 +79,11 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
             or sign in with Google once (which verifies automatically and lets you set your password
             from the Admin Portal).
           </p>
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-800">
+              {error}
+            </div>
+          )}
           {info && (
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
               {info}
@@ -75,27 +92,55 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           <div className="flex flex-col gap-2.5 pt-2">
             <button
               type="button"
+              disabled={loading}
               onClick={async () => {
-                await signInWithGoogle();
-                setPendingRedirect(true);
+                setError('');
+                setInfo('');
+                setLoading(true);
+                try {
+                  setPendingRedirect(true);
+                  await signInWithGoogle();
+                } catch (err) {
+                  setPendingRedirect(false);
+                  const msg = err instanceof Error ? err.message : String(err);
+                  if (msg.includes('auth/popup-blocked')) {
+                    setError(
+                      'Your browser blocked the Google pop-up inside this preview. Tap "Always show" at the top of your browser or open this page in a full browser tab to verify.'
+                    );
+                  } else {
+                    setError(msg || 'Unable to verify with Google.');
+                  }
+                } finally {
+                  setLoading(false);
+                }
               }}
-              className="w-full py-3 rounded-xl bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 cursor-pointer"
+              className="w-full py-3 rounded-xl bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
             >
-              Verify Instantly with Google ({user.email})
+              {loading ? 'Verifying...' : `Verify Instantly with Google (${user.email})`}
             </button>
             <button
               type="button"
+              disabled={loading}
               onClick={async () => {
-                await resendVerificationEmail();
-                setInfo('Verification email sent! Please check your inbox and then reload.');
+                setError('');
+                setInfo('');
+                setLoading(true);
+                try {
+                  await resendVerificationEmail();
+                  setInfo('Verification email sent! Please check your inbox and then reload.');
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Unable to send verification email.');
+                } finally {
+                  setLoading(false);
+                }
               }}
-              className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+              className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
             >
               Resend Verification Email
             </button>
             <button
               type="button"
-              onClick={() => logout()}
+              onClick={() => void logout()}
               className="w-full py-2 text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
             >
               Sign Out
@@ -149,6 +194,13 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
               </button>
             </>
           )}
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="w-full py-2 text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
+          >
+            Sign Out &amp; Switch Account
+          </button>
         </div>
       </div>
     );
@@ -156,18 +208,41 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
 
   const formatAuthError = (err: unknown): string => {
     const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('auth/popup-blocked')) {
+      setShowPopupBlockedHelp(true);
+      return 'Your browser blocked the Google sign-in pop-up inside this preview frame. Tap "Always show" at the top of your browser and try again, or open the login page directly in a full browser tab below.';
+    }
+    if (msg.includes('auth/cancelled-popup-request')) {
+      setShowPopupBlockedHelp(true);
+      return 'Google sign-in pop-up was interrupted. Tap "Continue with Google" again or open the app in a full browser tab below.';
+    }
+    if (msg.includes('auth/unauthorized-domain')) {
+      return 'This preview domain is not yet authorized in Firebase Authentication Settings → Authorized domains.';
+    }
     if (msg.includes('auth/operation-not-allowed')) {
       setShowEmailEnableGuide(true);
-      return 'Email/Password sign-in is not enabled yet in Firebase Console. Enable Email/Password in Firebase Authentication Sign-in Providers, or click "Continue with Google" above.';
+      return 'Email/Password sign-in is not enabled yet in Firebase Console. Click "Continue with Google" above to open the Admin Portal immediately, or enable Email/Password in Firebase Authentication Sign-in Providers.';
     }
-    if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
-      return 'Invalid email or password. If this is your first Super Admin login, click "Continue with Google" or register/link your password first.';
+    if (msg.includes('auth/invalid-email')) {
+      return 'Please enter a valid email address.';
+    }
+    if (
+      msg.includes('auth/invalid-credential') ||
+      msg.includes('auth/wrong-password') ||
+      msg.includes('auth/user-not-found')
+    ) {
+      return mode === 'reset'
+        ? 'No email/password account was found for that email address. If you sign in with Google, use "Continue with Google" above.'
+        : 'Incorrect email or password, or no password is linked to this email yet. If you previously signed in with Google (for example as Super Admin), click "Continue with Google" above and save your password inside Staff & Logins → Super Admin Password Login Setup—or use "Forgot password?" below.';
     }
     if (msg.includes('auth/email-already-in-use')) {
-      return 'An account with this email already exists. Please sign in instead.';
+      return 'An account with this email already exists. Click "Back to Sign In", or click "Continue with Google" / "Forgot password?" if you signed up with Google earlier.';
     }
     if (msg.includes('auth/weak-password')) {
       return 'Password should be at least 6 characters long.';
+    }
+    if (msg.includes('auth/too-many-requests')) {
+      return 'Too many failed attempts. Please wait a moment, or sign in with Google above / reset your password.';
     }
     if (msg.includes('auth/popup-closed-by-user')) {
       return 'Google sign-in popup was closed before completion.';
@@ -179,6 +254,7 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
     setError('');
     setInfo('');
     setShowEmailEnableGuide(false);
+    setShowPopupBlockedHelp(false);
     setLoading(true);
     try {
       setPendingRedirect(true);
@@ -196,6 +272,7 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
     setError('');
     setInfo('');
     setShowEmailEnableGuide(false);
+    setShowPopupBlockedHelp(false);
     setLoading(true);
     try {
       if (mode === 'login') {
@@ -205,8 +282,15 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
         setPendingRedirect(true);
         await registerWithEmail(name, email, password, phone);
       } else {
+        if (!email.trim()) {
+          setError('Please enter your registered email address.');
+          setLoading(false);
+          return;
+        }
         await resetPassword(email);
-        setInfo('Password reset link sent to your email if the account exists.');
+        setInfo(
+          `Password reset link sent to ${email.trim()}. Please check your Inbox and Spam/Junk folder, follow the link to choose a new password, then sign in.`
+        );
       }
     } catch (err) {
       setPendingRedirect(false);
@@ -233,7 +317,9 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                 : 'Reset Your Password'}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Automatically routes to Customer Dashboard or your Staff Role Dashboard
+            {mode === 'reset'
+              ? 'Enter your email address to receive a secure password reset link'
+              : 'Automatically routes to Customer Dashboard or your Staff Role Dashboard'}
           </p>
         </div>
 
@@ -274,11 +360,24 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 space-y-2 text-xs text-red-800">
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 space-y-2.5 text-xs text-red-800">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
+            {showPopupBlockedHelp && typeof window !== 'undefined' && (
+              <div className="pl-6 flex flex-wrap gap-2">
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800"
+                >
+                  Open Login in Full Browser Tab
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            )}
             {showEmailEnableGuide && (
               <a
                 href="https://console.firebase.google.com/project/tactical-iterator-h4cnq/authentication/providers"
@@ -348,13 +447,21 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   required
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-lg border border-slate-300 text-sm"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-slate-300 text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
           )}
@@ -366,7 +473,11 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           >
             {mode === 'register' && <UserPlus className="w-4 h-4" />}
             {loading
-              ? 'Signing in...'
+              ? mode === 'reset'
+                ? 'Sending Reset Email...'
+                : mode === 'register'
+                  ? 'Creating Account...'
+                  : 'Signing in...'
               : mode === 'login'
                 ? 'Sign In'
                 : mode === 'register'
@@ -380,14 +491,14 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
             <>
               <button
                 type="button"
-                onClick={() => setMode('register')}
+                onClick={() => switchMode('register')}
                 className="font-semibold text-emerald-700 hover:underline cursor-pointer"
               >
                 New customer? Register
               </button>
               <button
                 type="button"
-                onClick={() => setMode('reset')}
+                onClick={() => switchMode('reset')}
                 className="text-slate-600 hover:underline cursor-pointer"
               >
                 Forgot password?
@@ -396,7 +507,7 @@ export function AuthPage({ onNavigate }: AuthPageProps) {
           ) : (
             <button
               type="button"
-              onClick={() => setMode('login')}
+              onClick={() => switchMode('login')}
               className="font-semibold text-emerald-700 hover:underline cursor-pointer"
             >
               Back to Sign In

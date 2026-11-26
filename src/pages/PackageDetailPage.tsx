@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -38,6 +38,12 @@ export function PackageDetailPage({
   const [selectedDuration, setSelectedDuration] = useState<number>(
     allowedDurations.includes(initialDuration) ? initialDuration : allowedDurations[0]
   );
+
+  useEffect(() => {
+    setSelectedDuration(
+      allowedDurations.includes(initialDuration) ? initialDuration : allowedDurations[0]
+    );
+  }, [pkg.id, initialDuration, allowedDurations]);
 
   const depositPct = pkg.initialDepositPercent ?? storeSettings.defaultInitialDepositPercent ?? 0;
   const adminChargePct = pkg.adminChargePercent ?? storeSettings.defaultAdminChargePercent ?? 0;

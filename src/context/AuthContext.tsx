@@ -14,6 +14,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -34,7 +35,7 @@ import {
 import type { RolePermission, SavedAddress, StaffMember, StaffRole, UserProfile } from '../types';
 import { DEFAULT_ROLE_PERMISSIONS } from '../utils/seedData';
 
-const BOOTSTRAP_ADMIN_EMAILS = ['francisgabriel932@gmail.com', 'offnotenergy@gmail.com'];
+const BOOTSTRAP_ADMIN_EMAILS = ['francisgabriel932@gmail.com'];
 
 interface AuthContextValue {
   user: User | null;
@@ -62,6 +63,7 @@ interface AuthContextValue {
     branch: string;
     phone?: string;
   }) => Promise<{ uid: string }>;
+  deleteUserRecord: (targetUid: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (updates: {
     displayName: string;
@@ -84,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [authReady, setAuthReady] = useState(false);
   const [staffLoading, setStaffLoading] = useState(true);
+  const [, setAuthVersion] = useState(0);
 
   const isBootstrapEmailMatch = Boolean(
     user?.email && BOOTSTRAP_ADMIN_EMAILS.includes(user.email.toLowerCase())
@@ -99,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       : null;
 
   const isStaff = Boolean(staffRole);
-  const isSuperAdmin = staffRole === 'super_admin' || staffRole === 'ceo';
+  const isSuperAdmin = staffRole === 'super_admin';
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -212,41 +215,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signInWithGoogle() {
     setStaffLoading(true);
-    await signInWithPopup(auth, googleProvider);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      setStaffLoading(false);
+      throw err;
+    }
   }
 
   async function signInWithEmail(email: string, password: string) {
     setStaffLoading(true);
-    await signInWithEmailAndPassword(auth, email.trim(), password);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (err) {
+      setStaffLoading(false);
+      throw err;
+    }
   }
 
   async function registerWithEmail(name: string, email: string, password: string, phone: string) {
     setStaffLoading(true);
-    const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-    if (name.trim()) {
-      await updateProfile(cred.user, { displayName: name.trim() });
-    }
-    if (BOOTSTRAP_ADMIN_EMAILS.includes(email.trim().toLowerCase()) && !cred.user.emailVerified) {
-      try {
-        await sendEmailVerification(cred.user);
-      } catch {
-        // non-fatal
-      }
-    }
     try {
-      await setDoc(doc(db, 'users', cred.user.uid), {
-        uid: cred.user.uid,
-        displayName: name.trim() || email.trim().split('@')[0],
-        email: email.trim(),
-        phone: phone.trim(),
-        defaultAddress: '',
-        defaultCity: 'Ibadan',
-        defaultState: 'Oyo State',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      if (name.trim()) {
+        await updateProfile(cred.user, { displayName: name.trim() });
+      }
+      if (BOOTSTRAP_ADMIN_EMAILS.includes(email.trim().toLowerCase()) && !cred.user.emailVerified) {
+        try {
+          await sendEmailVerification(cred.user);
+        } catch {
+          // non-fatal
+        }
+      }
+      try {
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          uid: cred.user.uid,
+          displayName: name.trim() || email.trim().split('@')[0],
+          email: email.trim(),
+          phone: phone.trim(),
+          defaultAddress: '',
+          defaultCity: 'Ibadan',
+          defaultState: 'Oyo State',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `users/${cred.user.uid}`);
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `users/${cred.user.uid}`);
+      setStaffLoading(false);
+      throw err;
     }
   }
 
@@ -272,6 +290,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const cred = EmailAuthProvider.credential(auth.currentUser.email, newPassword);
       await linkWithCredential(auth.currentUser, cred);
     }
+    await auth.currentUser.reload();
+    setUser(auth.currentUser);
+    setAuthVersion((v) => v + 1);
   }
 
   async function createStaffAccount(params: {
@@ -283,7 +304,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     phone?: string;
   }): Promise<{ uid: string }> {
     if (!user || !isSuperAdmin) {
-      throw new Error('Only Super Admin or CEO can create staff accounts.');
+      throw new Error('Only the Super Admin can create staff accounts.');
     }
     const { uid } = await provisionStaffAuthAccount(
       params.email,
@@ -322,6 +343,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { uid };
   }
 
+  async function deleteUserRecord(targetUid: string): Promise<void> {
+    if (!user || !isSuperAdmin) {
+      throw new Error('Only the Super Admin can delete user accounts.');
+    }
+    if (targetUid === user.uid) {
+      throw new Error('You cannot delete your own active Super Admin account.');
+    }
+    try {
+      const addrSnap = await getDocs(collection(db, 'users', targetUid, 'addresses'));
+      for (const addrDoc of addrSnap.docs) {
+        await deleteDoc(doc(db, 'users', targetUid, 'addresses', addrDoc.id));
+      }
+      const staffSnap = await getDoc(doc(db, 'staff', targetUid));
+      if (staffSnap.exists()) {
+        await deleteDoc(doc(db, 'staff', targetUid));
+      }
+      await deleteDoc(doc(db, 'users', targetUid));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `users/${targetUid}`);
+    }
+  }
+
   async function logout() {
     await signOut(auth);
   }
@@ -334,13 +377,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     defaultState: string;
   }) {
     if (!user) throw new Error('You must be signed in.');
+    const safeName = updates.displayName.trim().slice(0, 120);
+    if (!safeName) throw new Error('Full name cannot be empty.');
     try {
       await updateDoc(doc(db, 'users', user.uid), {
-        displayName: updates.displayName.slice(0, 120),
-        phone: updates.phone.slice(0, 32),
-        defaultAddress: updates.defaultAddress.slice(0, 300),
-        defaultCity: updates.defaultCity.slice(0, 100),
-        defaultState: updates.defaultState.slice(0, 80),
+        displayName: safeName,
+        phone: updates.phone.trim().slice(0, 32),
+        defaultAddress: updates.defaultAddress.trim().slice(0, 300),
+        defaultCity: updates.defaultCity.trim().slice(0, 100),
+        defaultState: updates.defaultState.trim().slice(0, 80),
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
@@ -350,18 +395,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function addSavedAddress(addr: Omit<SavedAddress, 'id' | 'userId' | 'createdAt'>) {
     if (!user) throw new Error('You must be signed in.');
-    const id = `addr_${Date.now()}`;
+    const id = `addr_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     try {
       await setDoc(doc(db, 'users', user.uid, 'addresses', id), {
         id,
         userId: user.uid,
-        label: addr.label.slice(0, 60),
-        recipientName: addr.recipientName.slice(0, 120),
-        phone: addr.phone.slice(0, 32),
-        streetAddress: addr.streetAddress.slice(0, 300),
-        city: addr.city.slice(0, 100),
-        state: addr.state.slice(0, 80),
-        landmark: (addr.landmark || '').slice(0, 160),
+        label: addr.label.trim().slice(0, 60) || 'Home',
+        recipientName: addr.recipientName.trim().slice(0, 120),
+        phone: addr.phone.trim().slice(0, 32),
+        streetAddress: addr.streetAddress.trim().slice(0, 300),
+        city: addr.city.trim().slice(0, 100),
+        state: addr.state.trim().slice(0, 80),
+        landmark: (addr.landmark || '').trim().slice(0, 160),
         ...(typeof addr.lat === 'number' ? { lat: addr.lat } : {}),
         ...(typeof addr.lng === 'number' ? { lng: addr.lng } : {}),
         isDefault: Boolean(addr.isDefault),
@@ -402,6 +447,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resendVerificationEmail,
         linkOrUpdatePassword,
         createStaffAccount,
+        deleteUserRecord,
         logout,
         updateUserProfile,
         addSavedAddress,

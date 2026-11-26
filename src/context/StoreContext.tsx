@@ -207,7 +207,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authReady, user]);
 
-  const usingDemoCatalog = firestorePackages.length === 0 && firestoreProducts.length === 0;
+  const usingDemoCatalog = firestorePackages.length === 0 || firestoreProducts.length === 0;
   const products = firestoreProducts.length > 0 ? firestoreProducts : DEMO_PRODUCTS;
   const packages = firestorePackages.length > 0 ? firestorePackages : DEMO_PACKAGES;
 

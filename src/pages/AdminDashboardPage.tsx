@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
+  Calendar,
   CheckCircle2,
   ClipboardList,
   CreditCard,
@@ -13,12 +14,17 @@ import {
   EyeOff,
   KeyRound,
   Lock,
+  LogOut,
+  Mail,
+  Megaphone,
   MessageSquare,
   Package,
   Plus,
+  Send,
   Settings,
   Shield,
   ShieldAlert,
+  Sparkles,
   Star,
   Trash2,
   Truck,
@@ -75,6 +81,7 @@ type AdminTab =
   | 'packages'
   | 'products'
   | 'customers'
+  | 'campaigns'
   | 'inquiries'
   | 'staff'
   | 'settings';
@@ -107,31 +114,42 @@ async function compressImageToDataUrl(file: File): Promise<string> {
       const img = new Image();
       img.onerror = () => reject(new Error('Invalid image format.'));
       img.onload = () => {
-        const maxDim = 900;
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(String(reader.result));
+          reject(new Error('Unable to process image in browser.'));
           return;
         }
-        ctx.drawImage(img, 0, 0, width, height);
-        const compressed = canvas.toDataURL('image/jpeg', 0.8);
-        if (compressed.length > 280000) {
-          resolve(canvas.toDataURL('image/jpeg', 0.6));
+        let maxDim = 900;
+        let quality = 0.8;
+        let result = '';
+        for (let attempt = 0; attempt < 6; attempt++) {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          result = canvas.toDataURL('image/jpeg', quality);
+          if (result.length <= 260000) {
+            resolve(result);
+            return;
+          }
+          quality = Math.max(0.35, quality - 0.12);
+          maxDim = Math.round(maxDim * 0.78);
+        }
+        if (result.length <= 290000) {
+          resolve(result);
         } else {
-          resolve(compressed);
+          reject(new Error('Image is still too large after compression. Please choose a smaller image or paste an image URL.'));
         }
       };
       img.src = String(reader.result);
@@ -149,7 +167,10 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
     staffRecord,
     permissions,
     createStaffAccount,
+    deleteUserRecord,
+    resetPassword,
     linkOrUpdatePassword,
+    logout,
   } = useAuth();
   const {
     products,
@@ -204,6 +225,15 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
 
   const [approvalOrder, setApprovalOrder] = useState<Order | null>(null);
   const [approvalNotes, setApprovalNotes] = useState('');
+  const [approvalError, setApprovalError] = useState('');
+  const [decidingApproval, setDecidingApproval] = useState(false);
+
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [savingPackage, setSavingPackage] = useState(false);
+  const [savingManualPay, setSavingManualPay] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [savingOverride, setSavingOverride] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const [receiptPayment, setReceiptPayment] = useState<PaymentRecord | null>(null);
 
@@ -235,6 +265,21 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [showAdminPwd, setShowAdminPwd] = useState(false);
   const [linkingPwd, setLinkingPwd] = useState(false);
+
+  // Customer management (Reset Password & Delete User)
+  const [resettingEmail, setResettingEmail] = useState<string | null>(null);
+  const [confirmDeleteUserUid, setConfirmDeleteUserUid] = useState<string | null>(null);
+  const [deletingUserUid, setDeletingUserUid] = useState<string | null>(null);
+
+  // Happy New Month & New Product Broadcast Campaigns
+  const [broadcastSubject, setBroadcastSubject] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [selectedCatalogRef, setSelectedCatalogRef] = useState('');
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+  const [sendingNewMonth, setSendingNewMonth] = useState(false);
+  const [notifyUsersOnProductSave, setNotifyUsersOnProductSave] = useState(false);
+  const [notifyUsersOnPackageSave, setNotifyUsersOnPackageSave] = useState(false);
+  const autoMonthlySentRef = useRef<string>('');
 
   // Store Settings state
   const [settingsForm, setSettingsForm] = useState<StoreSetting>(storeSettings);
@@ -487,15 +532,272 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
     }
   };
 
-  // Effective capabilities based on Super Admin / Role Permissions
+  // Effective capabilities based on sole Super Admin / Role Permissions
   const canManageProducts = Boolean(permissions?.canManageProducts || isSuperAdmin);
   const canManagePackages = Boolean(permissions?.canManagePackages || isSuperAdmin);
   const canApproveInstalments = Boolean(permissions?.canApproveInstalments || isSuperAdmin);
   const canVerifyPayments = Boolean(permissions?.canVerifyPayments || isSuperAdmin);
   const canScheduleDelivery = Boolean(permissions?.canScheduleDelivery || isSuperAdmin);
-  const canOverrideDeliveryLock = Boolean(permissions?.canOverrideDeliveryLock || isSuperAdmin);
-  const canManageStaff = Boolean(permissions?.canManageStaff || isSuperAdmin);
+  const canOverrideDeliveryLock = isSuperAdmin;
+  const canManageStaff = isSuperAdmin;
+  const canSendCampaigns =
+    isSuperAdmin ||
+    staffRole === 'ceo' ||
+    staffRole === 'managing_director' ||
+    staffRole === 'manager';
   const canEditSettings = Boolean(permissions?.canEditSettings || isSuperAdmin);
+
+  // --- Bulk Customer Broadcast Helper (Email + In-App Notifications) ---
+  async function broadcastToAllCustomers(params: {
+    subject: string;
+    message: string;
+    campaignType: 'happy_new_month' | 'new_product' | 'announcement';
+    notifType: string;
+  }): Promise<{
+    sentCount: number;
+    totalRecipients: number;
+    emailConfigured: boolean;
+    note?: string;
+  }> {
+    if (!user) throw new Error('You must be signed in.');
+    const recipients = usersList
+      .filter((u) => Boolean(u.email && u.email.includes('@')))
+      .map((u) => ({ uid: u.uid, email: u.email, name: u.displayName || 'Valued Customer' }));
+
+    if (recipients.length === 0) {
+      throw new Error('No registered customer email addresses found yet.');
+    }
+
+    let sentCount = 0;
+    let emailConfigured = false;
+    let note: string | undefined;
+
+    try {
+      const idToken = await user.getIdToken();
+      const resp = await fetch('/api/notifications/broadcast', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          subject: params.subject.trim().slice(0, 160),
+          message: params.message.trim().slice(0, 4000),
+          campaignType: params.campaignType,
+          recipients: recipients.map((r) => ({ email: r.email, name: r.name })),
+        }),
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          sentCount?: number;
+          emailConfigured?: boolean;
+          note?: string;
+        };
+        sentCount = data.sentCount ?? 0;
+        emailConfigured = Boolean(data.emailConfigured);
+        note = data.note;
+      }
+    } catch {
+      // Continue logging in-app notifications even if mail server fails
+    }
+
+    const baseTs = Date.now();
+    await Promise.all(
+      recipients.map((recipient, idx) => {
+        const notifId = `notif_${baseTs}_${idx}_${Math.floor(Math.random() * 1000)}`;
+        return setDoc(doc(db, 'notifications', notifId), {
+          id: notifId,
+          userId: recipient.uid,
+          recipientEmail: recipient.email.slice(0, 160),
+          recipientPhone: '',
+          type: params.notifType.slice(0, 80),
+          title: params.subject.trim().slice(0, 160),
+          message: params.message.trim().slice(0, 1500),
+          channel: sentCount > 0 ? 'email' : 'in_app',
+          status: sentCount > 0 ? 'SENT' : 'LOGGED',
+          orderId: '',
+          createdAt: serverTimestamp(),
+        }).catch(() => undefined);
+      })
+    );
+
+    return {
+      sentCount,
+      totalRecipients: recipients.length,
+      emailConfigured,
+      note,
+    };
+  }
+
+  // --- Send Password Reset Email (Super Admin Action) ---
+  const handleAdminResetPassword = async (targetEmail: string, targetName: string) => {
+    if (!isSuperAdmin || !targetEmail) return;
+    setResettingEmail(targetEmail);
+    setErrorMsg('');
+    try {
+      await resetPassword(targetEmail);
+      await writeAuditLog({
+        action: 'ADMIN_SEND_PASSWORD_RESET',
+        targetType: 'user',
+        targetId: targetEmail.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128),
+        details: `Super Admin sent password reset email to ${targetName} (${targetEmail}).`,
+      });
+      showNotice(`Password reset email sent to ${targetEmail}.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('auth/operation-not-allowed')) {
+        setEmailEnableNeeded(true);
+        showError('Enable Email/Password sign-in in Firebase Console to send password reset links.');
+      } else {
+        showError(msg || 'Unable to send password reset email.');
+      }
+    } finally {
+      setResettingEmail(null);
+    }
+  };
+
+  // --- Delete User Profile & Staff Record (Super Admin Only) ---
+  const handleDeleteUser = async (target: UserProfile) => {
+    if (!isSuperAdmin || !user || target.uid === user.uid) return;
+    setDeletingUserUid(target.uid);
+    setErrorMsg('');
+    try {
+      await deleteUserRecord(target.uid);
+      await writeAuditLog({
+        action: 'DELETE_USER',
+        targetType: 'user',
+        targetId: target.uid,
+        details: `Super Admin deleted user profile ${target.displayName} (${target.email}) and revoked any staff access.`,
+      });
+      setConfirmDeleteUserUid(null);
+      showNotice(
+        `Deleted ${target.displayName} (${target.email}) from database and revoked staff access.`
+      );
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to delete user record.');
+    } finally {
+      setDeletingUserUid(null);
+    }
+  };
+
+  // --- Happy New Month Greeting Dispatch ---
+  const handleSendHappyNewMonth = async (isAuto = false) => {
+    if (sendingNewMonth || !canSendCampaigns) return;
+    const now = new Date();
+    const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const bodyText =
+      (settingsForm.happyNewMonthMessage || '').trim() ||
+      `Happy New Month from OFFNOT ENERGY! Wishing you uninterrupted clean solar power, peace of mind, and great success throughout ${monthName}.`;
+
+    setSendingNewMonth(true);
+    try {
+      const result = await broadcastToAllCustomers({
+        subject: `Happy New Month (${monthName}) from OFFNOT ENERGY!`,
+        message: bodyText,
+        campaignType: 'happy_new_month',
+        notifType: 'HAPPY_NEW_MONTH',
+      });
+
+      await setDoc(doc(db, 'settings', 'storeConfig'), {
+        id: 'storeConfig',
+        allowedDurations: settingsForm.allowedDurations?.length
+          ? settingsForm.allowedDurations
+          : [1, 2, 3, 4, 5],
+        defaultInitialDepositPercent: Math.min(
+          90,
+          Math.max(0, Number(settingsForm.defaultInitialDepositPercent) || 0)
+        ),
+        defaultAdminChargePercent: Math.min(
+          50,
+          Math.max(0, Number(settingsForm.defaultAdminChargePercent) || 0)
+        ),
+        gracePeriodDays: Math.min(30, Math.max(0, Number(settingsForm.gracePeriodDays) || 0)),
+        bankName: (settingsForm.bankName || '').trim().slice(0, 120),
+        bankAccountName: (settingsForm.bankAccountName || '').trim().slice(0, 160),
+        bankAccountNumber: (settingsForm.bankAccountNumber || '').trim().slice(0, 30),
+        instalmentTerms: (settingsForm.instalmentTerms || '').trim().slice(0, 5000),
+        warrantyPolicy: (settingsForm.warrantyPolicy || '').trim().slice(0, 5000),
+        returnPolicy: (settingsForm.returnPolicy || '').trim().slice(0, 5000),
+        privacyPolicy: (settingsForm.privacyPolicy || '').trim().slice(0, 5000),
+        termsAndConditions: (settingsForm.termsAndConditions || '').trim().slice(0, 5000),
+        autoHappyNewMonth: settingsForm.autoHappyNewMonth !== false,
+        happyNewMonthMessage: bodyText.slice(0, 2000),
+        lastNewMonthSent: monthKey,
+        updatedAt: serverTimestamp(),
+      });
+
+      await writeAuditLog({
+        action: isAuto ? 'AUTO_HAPPY_NEW_MONTH_CAMPAIGN' : 'HAPPY_NEW_MONTH_CAMPAIGN',
+        targetType: 'settings',
+        targetId: 'storeConfig',
+        details: `Sent Happy New Month (${monthKey}) to ${result.totalRecipients} registered users (${result.sentCount} emails sent).`,
+      });
+
+      showNotice(
+        result.emailConfigured && result.sentCount > 0
+          ? `Happy New Month message emailed and notified to ${result.totalRecipients} customers (${result.sentCount} emails sent).`
+          : `Happy New Month greeting logged to ${result.totalRecipients} customer accounts!${result.note ? ` (${result.note})` : ''}`
+      );
+    } catch (err) {
+      if (!isAuto) {
+        showError(err instanceof Error ? err.message : 'Unable to send Happy New Month message.');
+      }
+    } finally {
+      setSendingNewMonth(false);
+    }
+  };
+
+  // Automatic 1st-of-the-month Happy New Month trigger when Super Admin is online
+  useEffect(() => {
+    if (!isSuperAdmin || usersList.length === 0) return;
+    if (storeSettings.autoHappyNewMonth === false) return;
+    const now = new Date();
+    if (now.getDate() !== 1) return;
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    if (storeSettings.lastNewMonthSent === monthKey) return;
+    if (autoMonthlySentRef.current === monthKey) return;
+    autoMonthlySentRef.current = monthKey;
+    void handleSendHappyNewMonth(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSuperAdmin, usersList.length, storeSettings.autoHappyNewMonth, storeSettings.lastNewMonthSent]);
+
+  // --- New Product / Announcement Mail Broadcast ---
+  const handleSendBroadcastCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (sendingBroadcast || !canSendCampaigns) return;
+    if (!broadcastSubject.trim() || !broadcastMessage.trim()) {
+      showError('Please enter both an email subject and message body.');
+      return;
+    }
+    setSendingBroadcast(true);
+    try {
+      const result = await broadcastToAllCustomers({
+        subject: broadcastSubject,
+        message: broadcastMessage,
+        campaignType: 'new_product',
+        notifType: 'NEW_PRODUCT_ANNOUNCEMENT',
+      });
+      await writeAuditLog({
+        action: 'NEW_PRODUCT_BROADCAST',
+        targetType: 'notifications',
+        targetId: `broadcast_${Date.now()}`,
+        details: `Broadcast "${broadcastSubject.trim()}" to ${result.totalRecipients} users (${result.sentCount} emails sent).`,
+      });
+      showNotice(
+        result.emailConfigured && result.sentCount > 0
+          ? `New product mail sent to ${result.sentCount} customers and logged in all customer accounts!`
+          : `New product announcement notified to ${result.totalRecipients} customer accounts!${result.note ? ` (${result.note})` : ''}`
+      );
+      setBroadcastSubject('');
+      setBroadcastMessage('');
+      setSelectedCatalogRef('');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to send customer broadcast.');
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
 
   // --- Create New Staff Login (Email + Password) ---
   const handleCreateStaffLogin = async (e: React.FormEvent) => {
@@ -586,7 +888,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
 
   // --- Instalment Application Approval ---
   const handleDecisionApproval = async (decision: 'APPROVED' | 'REJECTED') => {
-    if (!approvalOrder || !user) return;
+    if (!approvalOrder || !user || decidingApproval) return;
+    setApprovalError('');
+    setDecidingApproval(true);
     try {
       const nextStatus = decision === 'APPROVED' ? 'AWAITING_PAYMENT' : 'REJECTED';
       await updateDoc(doc(db, 'orders', approvalOrder.id), {
@@ -620,18 +924,29 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         orderId: approvalOrder.id,
       });
 
-      showNotice(`Order ${approvalOrder.orderNumber} marked ${decision}.`);
+      showNotice(
+        decision === 'APPROVED'
+          ? `Order ${approvalOrder.orderNumber} approved for instalment payments.`
+          : `Order ${approvalOrder.orderNumber} declined.`
+      );
       setApprovalOrder(null);
       setApprovalNotes('');
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to update instalment application.';
+      setApprovalError(msg);
+      showError(msg);
       handleFirestoreError(err, OperationType.UPDATE, `orders/${approvalOrder.id}`);
+    } finally {
+      setDecidingApproval(false);
     }
   };
 
   // --- Apply Verified Payment to Order ---
   async function applyPaymentAmountToOrder(order: Order, addAmountNgn: number, reference: string) {
-    const newPaid = Math.min(order.totalAmountNgn, (order.amountPaidNgn || 0) + addAmountNgn);
-    const newOutstanding = Math.max(0, order.totalAmountNgn - newPaid);
+    const totalNgn = Math.round(order.totalAmountNgn || 0);
+    const currentPaid = Math.round(order.amountPaidNgn || 0);
+    const newPaid = Math.min(totalNgn, currentPaid + Math.round(addAmountNgn));
+    const newOutstanding = Math.max(0, totalNgn - newPaid);
     const fullyPaid = newOutstanding === 0;
 
     let remainingCovered = newPaid;
@@ -702,10 +1017,12 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
           orderId: order.id,
         });
       } else if (order && !approve) {
+        const totalNgn = Math.round(order.totalAmountNgn || 0);
+        const currentPaid = Math.round(order.amountPaidNgn || 0);
         await updateDoc(doc(db, 'orders', order.id), {
-          amountPaidNgn: order.amountPaidNgn,
-          outstandingBalanceNgn: order.outstandingBalanceNgn,
-          paymentStatus: order.amountPaidNgn > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+          amountPaidNgn: currentPaid,
+          outstandingBalanceNgn: Math.max(0, totalNgn - currentPaid),
+          paymentStatus: currentPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
           orderStatus: order.orderStatus,
           updatedAt: serverTimestamp(),
         });
@@ -724,22 +1041,29 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
           : `Payment ${pay.receiptNumber} marked as failed.`
       );
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to update payment verification.');
       handleFirestoreError(err, OperationType.UPDATE, `payments/${pay.id}`);
     }
   };
 
   const handleRecordManualPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualPayOrder || !user) return;
-    if (manualPayAmount <= 0 || manualPayAmount > manualPayOrder.outstandingBalanceNgn) {
+    if (!manualPayOrder || !user || savingManualPay) return;
+    const roundedPay = Math.round(manualPayAmount);
+    if (roundedPay <= 0 || roundedPay > manualPayOrder.outstandingBalanceNgn) {
       showError('Amount must be > ₦0 and <= outstanding balance.');
       return;
     }
 
-    const payId = `pay_${Date.now()}`;
+    const payId = `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const receiptNumber = `RCP-${String(Date.now()).slice(-7)}`;
-    const ref = manualPayRef.trim() || `BR-${String(Date.now()).slice(-6)}`;
+    const ref = manualPayRef.trim().slice(0, 120) || `BR-${String(Date.now()).slice(-6)}`;
+    if (ref.length < 3) {
+      showError('Payment reference must be at least 3 characters.');
+      return;
+    }
 
+    setSavingManualPay(true);
     try {
       await setDoc(doc(db, 'payments', payId), {
         id: payId,
@@ -750,7 +1074,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         userId: manualPayOrder.userId,
         customerName: manualPayOrder.customerName,
         customerEmail: manualPayOrder.customerEmail,
-        amountNgn: manualPayAmount,
+        amountNgn: roundedPay,
         method: manualPayMethod,
         channel: manualPayMethod === 'branch_cash' ? 'Branch Payment' : 'Verified Transfer',
         status: 'VERIFIED',
@@ -760,13 +1084,13 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         updatedAt: serverTimestamp(),
       });
 
-      const res = await applyPaymentAmountToOrder(manualPayOrder, manualPayAmount, ref);
+      const res = await applyPaymentAmountToOrder(manualPayOrder, roundedPay, ref);
 
       await writeAuditLog({
         action: 'RECORD_VERIFIED_PAYMENT',
         targetType: 'order',
         targetId: manualPayOrder.id,
-        details: `Recorded verified ${manualPayMethod} of ${formatNgn(manualPayAmount)} (${receiptNumber}) for ${manualPayOrder.orderNumber}.`,
+        details: `Recorded verified ${manualPayMethod} of ${formatNgn(roundedPay)} (${receiptNumber}) for ${manualPayOrder.orderNumber}.`,
       });
 
       await logAndSendNotification({
@@ -775,7 +1099,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         recipientPhone: manualPayOrder.customerPhone,
         type: res.fullyPaid ? 'FULL_PAYMENT_COMPLETED' : 'PAYMENT_VERIFIED',
         title: `Official Receipt ${receiptNumber} (${manualPayOrder.orderNumber})`,
-        message: `Payment of ${formatNgn(manualPayAmount)} recorded. Outstanding balance: ${formatNgn(res.newOutstanding)}.`,
+        message: `Payment of ${formatNgn(roundedPay)} recorded. Outstanding balance: ${formatNgn(res.newOutstanding)}.`,
         orderId: manualPayOrder.id,
       });
 
@@ -783,19 +1107,23 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       setManualPayOrder(null);
       setManualPayRef('');
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to record manual payment.');
       handleFirestoreError(err, OperationType.CREATE, `payments/${payId}`);
+    } finally {
+      setSavingManualPay(false);
     }
   };
 
   // --- Schedule Delivery & Installation (Strictly Gated) ---
   const handleScheduleDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scheduleOrder) return;
+    if (!scheduleOrder || savingSchedule) return;
     if (scheduleOrder.outstandingBalanceNgn > 0 && !scheduleOrder.overrideApplied) {
       showError('Policy Lock: Cannot schedule delivery while outstanding balance > ₦0.');
       return;
     }
 
+    setSavingSchedule(true);
     try {
       await updateDoc(doc(db, 'orders', scheduleOrder.id), {
         deliveryAuthorized: true,
@@ -825,12 +1153,18 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       showNotice(`Delivery & installation scheduled for ${scheduleOrder.orderNumber}.`);
       setScheduleOrder(null);
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to schedule delivery.');
       handleFirestoreError(err, OperationType.UPDATE, `orders/${scheduleOrder.id}`);
+    } finally {
+      setSavingSchedule(false);
     }
   };
 
   const handleMarkCompleted = async (order: Order) => {
-    if (order.outstandingBalanceNgn > 0 && !order.overrideApplied) return;
+    if (order.outstandingBalanceNgn > 0 && !order.overrideApplied) {
+      showError('Cannot mark completed before full payment or Super Admin override.');
+      return;
+    }
     try {
       const completedAt = new Date().toISOString().split('T')[0];
       await updateDoc(doc(db, 'orders', order.id), {
@@ -847,18 +1181,24 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       });
       showNotice(`Order ${order.orderNumber} marked COMPLETED.`);
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to mark order completed.');
       handleFirestoreError(err, OperationType.UPDATE, `orders/${order.id}`);
     }
   };
 
   const handleSuperAdminOverride = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!overrideOrder || !user) return;
+    if (!overrideOrder || !user || savingOverride) return;
+    if (!isSuperAdmin) {
+      showError('Only the Super Admin can authorize delivery lock overrides.');
+      return;
+    }
     if (overrideReason.trim().length < 10) {
       showError('Override reason must be at least 10 characters.');
       return;
     }
 
+    setSavingOverride(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       await updateDoc(doc(db, 'orders', overrideOrder.id), {
@@ -884,7 +1224,10 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       setOverrideOrder(null);
       setOverrideReason('');
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to apply override.');
       handleFirestoreError(err, OperationType.UPDATE, `orders/${overrideOrder.id}`);
+    } finally {
+      setSavingOverride(false);
     }
   };
 
@@ -921,11 +1264,16 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       );
       setStaffUidInput('');
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to assign staff role.');
       handleFirestoreError(err, OperationType.WRITE, `staff/${targetUser.uid}`);
     }
   };
 
   const handleToggleStaffActive = async (member: StaffMember) => {
+    if (member.uid === user.uid) {
+      showError('You cannot disable your own active Super Admin account.');
+      return;
+    }
     try {
       await updateDoc(doc(db, 'staff', member.uid), {
         active: !member.active,
@@ -937,7 +1285,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         targetId: member.uid,
         details: `Set staff ${member.email} active=${!member.active}.`,
       });
+      showNotice(`${member.displayName} is now ${!member.active ? 'Active' : 'Disabled'}.`);
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to update staff status.');
       handleFirestoreError(err, OperationType.UPDATE, `staff/${member.uid}`);
     }
   };
@@ -961,6 +1311,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       });
       showNotice(`Updated ${member.displayName}'s role & branch.`);
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to update staff role/branch.');
       handleFirestoreError(err, OperationType.UPDATE, `staff/${member.uid}`);
     }
   };
@@ -974,6 +1325,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       });
       showNotice(`Permissions updated for ${STAFF_ROLE_LABELS[role]}.`);
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to save role permissions.');
       handleFirestoreError(err, OperationType.WRITE, `rolePermissions/${role}`);
     }
   };
@@ -981,10 +1333,34 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
   // --- Store Settings Save ---
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingSettings) return;
+    setSavingSettings(true);
     try {
       await setDoc(doc(db, 'settings', 'storeConfig'), {
-        ...settingsForm,
         id: 'storeConfig',
+        allowedDurations: settingsForm.allowedDurations?.length
+          ? settingsForm.allowedDurations
+          : [1, 2, 3, 4, 5],
+        defaultInitialDepositPercent: Math.min(
+          90,
+          Math.max(0, Number(settingsForm.defaultInitialDepositPercent) || 0)
+        ),
+        defaultAdminChargePercent: Math.min(
+          50,
+          Math.max(0, Number(settingsForm.defaultAdminChargePercent) || 0)
+        ),
+        gracePeriodDays: Math.min(30, Math.max(0, Number(settingsForm.gracePeriodDays) || 0)),
+        bankName: (settingsForm.bankName || '').trim().slice(0, 120),
+        bankAccountName: (settingsForm.bankAccountName || '').trim().slice(0, 160),
+        bankAccountNumber: (settingsForm.bankAccountNumber || '').trim().slice(0, 30),
+        instalmentTerms: (settingsForm.instalmentTerms || '').trim().slice(0, 5000),
+        warrantyPolicy: (settingsForm.warrantyPolicy || '').trim().slice(0, 5000),
+        returnPolicy: (settingsForm.returnPolicy || '').trim().slice(0, 5000),
+        privacyPolicy: (settingsForm.privacyPolicy || '').trim().slice(0, 5000),
+        termsAndConditions: (settingsForm.termsAndConditions || '').trim().slice(0, 5000),
+        autoHappyNewMonth: settingsForm.autoHappyNewMonth !== false,
+        happyNewMonthMessage: (settingsForm.happyNewMonthMessage || '').trim().slice(0, 2000),
+        lastNewMonthSent: (settingsForm.lastNewMonthSent || '').trim().slice(0, 20),
         updatedAt: serverTimestamp(),
       });
       await writeAuditLog({
@@ -995,7 +1371,10 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       });
       showNotice('Store configuration & policies saved.');
     } catch (err) {
+      showError(err instanceof Error ? err.message : 'Unable to save store settings.');
       handleFirestoreError(err, OperationType.WRITE, 'settings/storeConfig');
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -1052,8 +1431,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
           {/* Branch Scope Filter */}
           <select
             value={branchFilter}
+            disabled={isBranchSalesRep && Boolean(assignedBranch) && assignedBranch !== 'Head Office'}
             onChange={(e) => setBranchFilter(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700"
+            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-600"
             aria-label="Filter by Branch"
           >
             <option value="ALL">All Branches</option>
@@ -1081,8 +1461,32 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             <Download className="w-4 h-4" />
             Download CSV Report
           </button>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            Log Out
+          </button>
         </div>
       </div>
+
+      {isSuperAdmin && !user.providerData.some((p) => p.providerId === 'password') && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs sm:text-sm text-amber-950 flex flex-wrap items-center justify-between gap-3">
+          <span>
+            <strong>Password Login Not Linked Yet:</strong> Set your Email &amp; Password credential so
+            you can sign in directly with <strong>{user.email}</strong> + password on any device.
+          </span>
+          <button
+            type="button"
+            onClick={() => setTab('staff')}
+            className="px-3 py-1.5 rounded-lg bg-amber-700 text-white text-xs font-bold hover:bg-amber-800 cursor-pointer shrink-0"
+          >
+            Set Super Admin Password →
+          </button>
+        </div>
+      )}
 
       {bannerMsg && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs sm:text-sm font-semibold text-emerald-900 flex items-center gap-2">
@@ -1144,6 +1548,12 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             label: `Customers (${usersList.length})`,
             icon: Users,
             visible: true,
+          },
+          {
+            id: 'campaigns',
+            label: 'Customer Mail & Campaigns',
+            icon: Megaphone,
+            visible: canSendCampaigns,
           },
           {
             id: 'inquiries',
@@ -1363,6 +1773,8 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               <option value="FULLY_PAID_AWAITING_DELIVERY">Fully Paid – Awaiting Delivery</option>
               <option value="SCHEDULED_FOR_INSTALLATION">Scheduled for Installation</option>
               <option value="COMPLETED">Completed</option>
+              <option value="REJECTED">Declined / Rejected</option>
+              <option value="CANCELLED">Cancelled</option>
             </select>
           </div>
 
@@ -1443,6 +1855,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                           onClick={() => {
                             setApprovalOrder(order);
                             setApprovalNotes('');
+                            setApprovalError('');
                           }}
                           className="px-3.5 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 cursor-pointer"
                         >
@@ -1508,19 +1921,23 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                         </button>
                       )}
 
-                      {isLocked && canOverrideDeliveryLock && order.orderStatus !== 'CANCELLED' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOverrideOrder(order);
-                            setOverrideReason('');
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-amber-400 bg-amber-50 text-amber-950 font-bold hover:bg-amber-100 cursor-pointer"
-                        >
-                          <Unlock className="w-3.5 h-3.5" />
-                          Super Admin Override
-                        </button>
-                      )}
+                      {isLocked &&
+                        isSuperAdmin &&
+                        canOverrideDeliveryLock &&
+                        order.orderStatus !== 'CANCELLED' &&
+                        order.orderStatus !== 'REJECTED' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOverrideOrder(order);
+                              setOverrideReason('');
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-amber-400 bg-amber-50 text-amber-950 font-bold hover:bg-amber-100 cursor-pointer"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                            Super Admin Override
+                          </button>
+                        )}
                     </div>
                   </div>
                 );
@@ -1652,6 +2069,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                     isFeatured: true,
                     isPublished: true,
                   });
+                  setNotifyUsersOnPackageSave(false);
                   setShowPackageModal(true);
                 }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
@@ -1710,8 +2128,19 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                         <button
                           type="button"
                           onClick={async () => {
-                            await deleteDoc(doc(db, 'packages', pkg.id));
-                            showNotice(`Deleted package ${pkg.name}.`);
+                            try {
+                              await deleteDoc(doc(db, 'packages', pkg.id));
+                              await writeAuditLog({
+                                action: 'DELETE_PACKAGE',
+                                targetType: 'package',
+                                targetId: pkg.id,
+                                details: `Deleted solar package ${pkg.name}.`,
+                              });
+                              showNotice(`Deleted package ${pkg.name}.`);
+                            } catch (err) {
+                              showError(err instanceof Error ? err.message : 'Unable to delete package.');
+                              handleFirestoreError(err, OperationType.DELETE, `packages/${pkg.id}`);
+                            }
                           }}
                           className="p-2 rounded-lg border border-slate-200 text-red-600 hover:bg-red-50 cursor-pointer"
                           aria-label="Delete Package"
@@ -1755,6 +2184,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                     isBestSeller: false,
                     isPublished: true,
                   });
+                  setNotifyUsersOnProductSave(false);
                   setShowProductModal(true);
                 }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
@@ -1828,8 +2258,19 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                           <button
                             type="button"
                             onClick={async () => {
-                              await deleteDoc(doc(db, 'products', prod.id));
-                              showNotice(`Deleted ${prod.name}.`);
+                              try {
+                                await deleteDoc(doc(db, 'products', prod.id));
+                                await writeAuditLog({
+                                  action: 'DELETE_PRODUCT',
+                                  targetType: 'product',
+                                  targetId: prod.id,
+                                  details: `Deleted product ${prod.name}.`,
+                                });
+                                showNotice(`Deleted ${prod.name}.`);
+                              } catch (err) {
+                                showError(err instanceof Error ? err.message : 'Unable to delete product.');
+                                handleFirestoreError(err, OperationType.DELETE, `products/${prod.id}`);
+                              }
                             }}
                             className="px-2.5 py-1 rounded border border-red-200 text-red-700 font-semibold cursor-pointer"
                           >
@@ -1847,43 +2288,376 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
 
       {/* F. CUSTOMERS */}
       {tab === 'customers' && (
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-x-auto">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-base font-bold text-slate-900">Registered Customer Accounts</h2>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white overflow-x-auto">
+            <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Registered Customer Accounts</h2>
+                <p className="text-xs text-slate-500">
+                  {isSuperAdmin
+                    ? 'Super Admin can send password reset emails or delete customer database records.'
+                    : 'View registered customer profiles and order history.'}
+                </p>
+              </div>
+              {canSendCampaigns && (
+                <button
+                  type="button"
+                  onClick={() => setTab('campaigns')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  Mail All Customers
+                </button>
+              )}
+            </div>
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-xs text-slate-600 border-b border-slate-200">
+                <tr>
+                  <th className="px-5 py-3">Customer</th>
+                  <th className="px-5 py-3">Email &amp; Phone</th>
+                  <th className="px-5 py-3">Location</th>
+                  <th className="px-5 py-3">Orders</th>
+                  <th className="px-5 py-3">Total Spent</th>
+                  {isSuperAdmin && <th className="px-5 py-3 text-right">Super Admin Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {usersList.map((u) => {
+                  const uOrders = branchScopedOrders.filter((o) => o.userId === u.uid);
+                  const spent = uOrders.reduce((s, o) => s + (o.amountPaidNgn || 0), 0);
+                  const isSelf = u.uid === user.uid;
+                  const isConfirmingDelete = confirmDeleteUserUid === u.uid;
+                  return (
+                    <tr key={u.uid}>
+                      <td className="px-5 py-3 font-bold text-slate-900">
+                        {u.displayName}
+                        {isSelf && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
+                            Super Admin
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div>{u.email}</div>
+                        <div className="text-slate-500">{u.phone || 'No phone saved'}</div>
+                      </td>
+                      <td className="px-5 py-3 text-slate-600">
+                        {[u.defaultCity, u.defaultState].filter(Boolean).join(', ') || 'Nigeria'}
+                      </td>
+                      <td className="px-5 py-3 font-mono-num font-bold">{uOrders.length}</td>
+                      <td className="px-5 py-3 font-mono-num font-bold text-emerald-800">
+                        {formatNgn(spent)}
+                      </td>
+                      {isSuperAdmin && (
+                        <td className="px-5 py-3 text-right">
+                          <div className="inline-flex flex-wrap items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={!u.email || resettingEmail === u.email}
+                              onClick={() =>
+                                void handleAdminResetPassword(u.email, u.displayName)
+                              }
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+                              title="Send Firebase password reset email"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                              {resettingEmail === u.email ? 'Sending...' : 'Reset Password'}
+                            </button>
+
+                            {!isSelf && !isConfirmingDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteUserUid(u.uid)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-red-700 font-semibold hover:bg-red-50 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                              </button>
+                            )}
+
+                            {!isSelf && isConfirmingDelete && (
+                              <div className="inline-flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={deletingUserUid === u.uid}
+                                  onClick={() => void handleDeleteUser(u)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-red-600 text-white font-bold hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {deletingUserUid === u.uid ? 'Deleting...' : 'Confirm Delete'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={deletingUserUid === u.uid}
+                                  onClick={() => setConfirmDeleteUserUid(null)}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-300 text-slate-600 font-semibold cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 text-xs text-slate-600 border-b border-slate-200">
-              <tr>
-                <th className="px-5 py-3">Customer</th>
-                <th className="px-5 py-3">Email &amp; Phone</th>
-                <th className="px-5 py-3">Location</th>
-                <th className="px-5 py-3">Orders</th>
-                <th className="px-5 py-3">Total Spent</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {usersList.map((u) => {
-                const uOrders = branchScopedOrders.filter((o) => o.userId === u.uid);
-                const spent = uOrders.reduce((s, o) => s + (o.amountPaidNgn || 0), 0);
-                return (
-                  <tr key={u.uid}>
-                    <td className="px-5 py-3 font-bold text-slate-900">{u.displayName}</td>
-                    <td className="px-5 py-3">
-                      <div>{u.email}</div>
-                      <div className="text-slate-500">{u.phone || 'No phone saved'}</div>
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">
-                      {[u.defaultCity, u.defaultState].filter(Boolean).join(', ') || 'Nigeria'}
-                    </td>
-                    <td className="px-5 py-3 font-mono-num font-bold">{uOrders.length}</td>
-                    <td className="px-5 py-3 font-mono-num font-bold text-emerald-800">
-                      {formatNgn(spent)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {isSuperAdmin && (
+            <p className="text-xs text-slate-500">
+              Deleting a customer removes their profile, saved addresses, and any staff role access
+              from the database. To permanently remove their sign-in credentials from Firebase
+              Authentication as well, visit{' '}
+              <a
+                href="https://console.firebase.google.com/project/tactical-iterator-h4cnq/authentication/users"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-emerald-700 underline"
+              >
+                Firebase Console → Authentication → Users
+              </a>
+              .
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* F2. CUSTOMER MAIL & CAMPAIGNS (HAPPY NEW MONTH + NEW PRODUCT BROADCAST) */}
+      {tab === 'campaigns' && canSendCampaigns && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Happy New Month Automatic & Manual Greeting */}
+          <div className="lg:col-span-5 rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-emerald-700 shrink-0" />
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    Happy New Month Customer Greeting
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Automatically emails &amp; notifies all registered users on the 1st of every
+                    month, or send manually anytime.
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-800 text-[11px] font-bold shrink-0">
+                {storeSettings.lastNewMonthSent
+                  ? `Last sent: ${storeSettings.lastNewMonthSent}`
+                  : 'Not sent yet'}
+              </span>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settingsForm.autoHappyNewMonth !== false}
+                onChange={(e) =>
+                  setSettingsForm({ ...settingsForm, autoHappyNewMonth: e.target.checked })
+                }
+                className="w-4 h-4 accent-emerald-700"
+              />
+              Auto-send Happy New Month greeting on the 1st of each month
+            </label>
+
+            <div className="text-xs space-y-1">
+              <label className="block font-semibold text-slate-700">
+                Monthly Greeting Message
+              </label>
+              <textarea
+                rows={5}
+                maxLength={2000}
+                value={settingsForm.happyNewMonthMessage || ''}
+                onChange={(e) =>
+                  setSettingsForm({ ...settingsForm, happyNewMonthMessage: e.target.value })
+                }
+                placeholder="Write your Happy New Month message to all OFFNOT ENERGY customers..."
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs leading-relaxed"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                type="button"
+                disabled={savingSettings}
+                onClick={async () => {
+                  if (savingSettings) return;
+                  setSavingSettings(true);
+                  try {
+                    await setDoc(doc(db, 'settings', 'storeConfig'), {
+                      id: 'storeConfig',
+                      allowedDurations: settingsForm.allowedDurations?.length
+                        ? settingsForm.allowedDurations
+                        : [1, 2, 3, 4, 5],
+                      defaultInitialDepositPercent: Math.min(
+                        90,
+                        Math.max(0, Number(settingsForm.defaultInitialDepositPercent) || 0)
+                      ),
+                      defaultAdminChargePercent: Math.min(
+                        50,
+                        Math.max(0, Number(settingsForm.defaultAdminChargePercent) || 0)
+                      ),
+                      gracePeriodDays: Math.min(
+                        30,
+                        Math.max(0, Number(settingsForm.gracePeriodDays) || 0)
+                      ),
+                      bankName: (settingsForm.bankName || '').trim().slice(0, 120),
+                      bankAccountName: (settingsForm.bankAccountName || '').trim().slice(0, 160),
+                      bankAccountNumber: (settingsForm.bankAccountNumber || '').trim().slice(0, 30),
+                      instalmentTerms: (settingsForm.instalmentTerms || '').trim().slice(0, 5000),
+                      warrantyPolicy: (settingsForm.warrantyPolicy || '').trim().slice(0, 5000),
+                      returnPolicy: (settingsForm.returnPolicy || '').trim().slice(0, 5000),
+                      privacyPolicy: (settingsForm.privacyPolicy || '').trim().slice(0, 5000),
+                      termsAndConditions: (settingsForm.termsAndConditions || '').trim().slice(0, 5000),
+                      autoHappyNewMonth: settingsForm.autoHappyNewMonth !== false,
+                      happyNewMonthMessage: (settingsForm.happyNewMonthMessage || '')
+                        .trim()
+                        .slice(0, 2000),
+                      lastNewMonthSent: (settingsForm.lastNewMonthSent || '').trim().slice(0, 20),
+                      updatedAt: serverTimestamp(),
+                    });
+                    showNotice('Happy New Month template & auto-send setting saved.');
+                  } catch (err) {
+                    showError(err instanceof Error ? err.message : 'Unable to save template.');
+                  } finally {
+                    setSavingSettings(false);
+                  }
+                }}
+                className="px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+              >
+                {savingSettings ? 'Saving...' : 'Save Template'}
+              </button>
+
+              <button
+                type="button"
+                disabled={sendingNewMonth || usersList.length === 0}
+                onClick={() => void handleSendHappyNewMonth(false)}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                {sendingNewMonth
+                  ? 'Sending Greeting...'
+                  : `Send Happy New Month Now (${usersList.length})`}
+              </button>
+            </div>
+          </div>
+
+          {/* New Product & Package Announcement Broadcast */}
+          <form
+            onSubmit={handleSendBroadcastCampaign}
+            className="lg:col-span-7 rounded-2xl border border-slate-200 bg-white p-6 space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-orange-600 shrink-0" />
+              <div>
+                <h2 className="text-base font-bold text-slate-900">
+                  New Product &amp; Package Mail Broadcast
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Notify all {usersList.length} registered users by email and in-app alert whenever
+                  new solar products or packages arrive.
+                </p>
+              </div>
+            </div>
+
+            <div className="text-xs">
+              <label className="block font-semibold text-slate-700 mb-1">
+                Quick Pre-Fill from Catalog (Optional)
+              </label>
+              <select
+                value={selectedCatalogRef}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedCatalogRef(val);
+                  if (!val) return;
+                  if (val.startsWith('prod:')) {
+                    const p = products.find((item) => item.id === val.slice(5));
+                    if (p) {
+                      setBroadcastSubject(`New Solar Product Available: ${p.name}`);
+                      setBroadcastMessage(
+                        `Great news! We just added ${p.name} (${p.model}) under ${p.category} at OFFNOT ENERGY.\n\nPrice: ${
+                          p.priceNgn > 0 ? formatNgn(p.priceNgn) : 'Contact Branch for Current Price'
+                        }\nKey Specs: ${p.specs}\n\n${p.description}\n\nOrder online anytime or visit our Dugbe & Dalute branches in Ibadan.`
+                      );
+                    }
+                  } else if (val.startsWith('pkg:')) {
+                    const pkg = packages.find((item) => item.id === val.slice(4));
+                    if (pkg) {
+                      setBroadcastSubject(`New Solar Package Launch: ${pkg.name} (${pkg.capacityKva})`);
+                      setBroadcastMessage(
+                        `Introducing our ${pkg.name} (${pkg.capacityKva}) complete solar energy package at OFFNOT ENERGY!\n\nFull Price: ${formatNgn(
+                          pkg.priceNgn
+                        )}\nSystem Specs: ${pkg.inverterCapacity} · ${pkg.batteryCapacity} · ${
+                          pkg.panelQuantity
+                        } Solar Panels (${pkg.panelWattage})\n\nAvailable for outright purchase or flexible 2–5 month instalment plans. Sign in to apply online today!`
+                      );
+                    }
+                  }
+                }}
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+              >
+                <option value="">-- Choose a product or solar package to auto-fill --</option>
+                <optgroup label="Solar Packages">
+                  {packages.map((pkg) => (
+                    <option key={pkg.id} value={`pkg:${pkg.id}`}>
+                      {pkg.name} ({pkg.capacityKva}) — {formatNgn(pkg.priceNgn)}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Individual Products">
+                  {products.map((prod) => (
+                    <option key={prod.id} value={`prod:${prod.id}`}>
+                      {prod.name} ({prod.category})
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
+            <div className="text-xs">
+              <label className="block font-semibold text-slate-700 mb-1">Email Subject</label>
+              <input
+                required
+                maxLength={160}
+                value={broadcastSubject}
+                onChange={(e) => setBroadcastSubject(e.target.value)}
+                placeholder="e.g. New Arrival: 5kVA Lithium Hybrid Inverter Now in Stock!"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm"
+              />
+            </div>
+
+            <div className="text-xs">
+              <label className="block font-semibold text-slate-700 mb-1">
+                Announcement Message
+              </label>
+              <textarea
+                required
+                rows={6}
+                maxLength={4000}
+                value={broadcastMessage}
+                onChange={(e) => setBroadcastMessage(e.target.value)}
+                placeholder="Describe the new solar product, pricing, warranty, and branch availability..."
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs leading-relaxed"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <p className="text-[11px] text-slate-500">
+                Sends email (when Resend email key is configured) and an instant dashboard
+                notification to all registered customers.
+              </p>
+              <button
+                type="submit"
+                disabled={sendingBroadcast || usersList.length === 0}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                {sendingBroadcast
+                  ? 'Sending Broadcast...'
+                  : `Send Mail to All Users (${usersList.length})`}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -1912,12 +2686,20 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       </div>
                       <select
                         value={inq.status}
+                        disabled={staffRole === 'accounts_staff'}
                         onChange={async (e) => {
-                          await updateDoc(doc(db, 'inquiries', inq.id), {
-                            status: e.target.value,
-                          });
+                          const nextStatus = e.target.value;
+                          try {
+                            await updateDoc(doc(db, 'inquiries', inq.id), {
+                              status: nextStatus,
+                            });
+                            showNotice(`Inquiry from ${inq.name} marked ${nextStatus}.`);
+                          } catch (err) {
+                            showError(err instanceof Error ? err.message : 'Unable to update inquiry status.');
+                            handleFirestoreError(err, OperationType.UPDATE, `inquiries/${inq.id}`);
+                          }
                         }}
-                        className="px-2 py-1 rounded border border-slate-300 bg-white font-semibold"
+                        className="px-2 py-1 rounded border border-slate-300 bg-white font-semibold disabled:opacity-50"
                       >
                         <option value="NEW">NEW</option>
                         <option value="IN_PROGRESS">IN_PROGRESS</option>
@@ -1945,7 +2727,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       key={rev.id}
                       className="rounded-xl border border-slate-200 p-4 text-xs space-y-2"
                     >
-                      <div className="flex justify-between items-start">
+                      <div className="flex justify-between items-start gap-2">
                         <div>
                           <p className="font-bold text-slate-900">
                             {rev.customerName} ({rev.location})
@@ -1959,21 +2741,50 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                         {(isSuperAdmin ||
                           staffRole === 'managing_director' ||
                           staffRole === 'manager') && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await updateDoc(doc(db, 'reviews', rev.id), {
-                                isPublished: !rev.isPublished,
-                              });
-                            }}
-                            className={`px-2.5 py-1 rounded font-bold cursor-pointer ${
-                              rev.isPublished
-                                ? 'bg-emerald-700 text-white'
-                                : 'border border-slate-300 text-slate-700'
-                            }`}
-                          >
-                            {rev.isPublished ? 'Published' : 'Publish'}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const nextPub = !rev.isPublished;
+                                  await updateDoc(doc(db, 'reviews', rev.id), {
+                                    isPublished: nextPub,
+                                  });
+                                  showNotice(
+                                    nextPub
+                                      ? `Published review by ${rev.customerName}.`
+                                      : `Unpublished review by ${rev.customerName}.`
+                                  );
+                                } catch (err) {
+                                  showError(err instanceof Error ? err.message : 'Unable to update review.');
+                                  handleFirestoreError(err, OperationType.UPDATE, `reviews/${rev.id}`);
+                                }
+                              }}
+                              className={`px-2.5 py-1 rounded font-bold cursor-pointer ${
+                                rev.isPublished
+                                  ? 'bg-emerald-700 text-white'
+                                  : 'border border-slate-300 text-slate-700'
+                              }`}
+                            >
+                              {rev.isPublished ? 'Published' : 'Publish'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await deleteDoc(doc(db, 'reviews', rev.id));
+                                  showNotice(`Deleted review by ${rev.customerName}.`);
+                                } catch (err) {
+                                  showError(err instanceof Error ? err.message : 'Unable to delete review.');
+                                  handleFirestoreError(err, OperationType.DELETE, `reviews/${rev.id}`);
+                                }
+                              }}
+                              className="p-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                              aria-label="Delete Review"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                       <p className="text-slate-700 italic">&ldquo;{rev.quote}&rdquo;</p>
@@ -2164,12 +2975,11 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       }}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-white text-sm"
                     >
-                      <option value="ceo">CEO (Full Executive Control)</option>
+                      <option value="ceo">CEO (Executive Operations)</option>
                       <option value="managing_director">Managing Director</option>
                       <option value="manager">Manager</option>
                       <option value="sales_rep">Sales Rep (Branch)</option>
                       <option value="accounts_staff">Accounts Staff</option>
-                      <option value="super_admin">Super Admin</option>
                     </select>
                   </div>
                   <div>
@@ -2204,8 +3014,8 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 Assign Role to Existing Registered User
               </h2>
               <p className="text-xs text-slate-500">
-                If a staff member already signed in via Google or created a customer account, select
-                them below to assign their OFFNOT ENERGY role and branch.
+                Only the Super Admin (francisgabriel932@gmail.com) assigns and updates staff roles.
+                All staff roles below operate under the Super Admin.
               </p>
               <form onSubmit={handleAssignStaff} className="space-y-3 text-xs">
                 <div>
@@ -2217,11 +3027,13 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-white text-sm"
                   >
                     <option value="">Select a registered user...</option>
-                    {usersList.map((u) => (
-                      <option key={u.uid} value={u.uid}>
-                        {u.displayName} ({u.email})
-                      </option>
-                    ))}
+                    {usersList
+                      .filter((u) => u.uid !== user.uid)
+                      .map((u) => (
+                        <option key={u.uid} value={u.uid}>
+                          {u.displayName} ({u.email})
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -2237,7 +3049,6 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       <option value="manager">Manager</option>
                       <option value="sales_rep">Sales Rep</option>
                       <option value="accounts_staff">Accounts Staff</option>
-                      <option value="super_admin">Super Admin</option>
                     </select>
                   </div>
                   <div>
@@ -2301,7 +3112,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                         <option value="manager">Manager</option>
                         <option value="sales_rep">Sales Rep</option>
                         <option value="accounts_staff">Accounts Staff</option>
-                        <option value="super_admin">Super Admin</option>
+                        {m.role === 'super_admin' && <option value="super_admin">Super Admin</option>}
                       </select>
                       <select
                         value={m.branch || 'Dugbe Branch'}
@@ -2316,6 +3127,16 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       </select>
                       <button
                         type="button"
+                        disabled={!m.email || resettingEmail === m.email}
+                        onClick={() => void handleAdminResetPassword(m.email, m.displayName)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+                        title="Send password reset email"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                        {resettingEmail === m.email ? 'Sending...' : 'Reset Password'}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleToggleStaffActive(m)}
                         className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
                           m.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-500'
@@ -2325,11 +3146,27 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                       </button>
                       <button
                         type="button"
+                        disabled={m.uid === user.uid}
                         onClick={async () => {
-                          await deleteDoc(doc(db, 'staff', m.uid));
-                          showNotice(`Removed ${m.displayName} from staff directory.`);
+                          if (m.uid === user.uid) {
+                            showError('You cannot remove your own Super Admin account.');
+                            return;
+                          }
+                          try {
+                            await deleteDoc(doc(db, 'staff', m.uid));
+                            await writeAuditLog({
+                              action: 'REMOVE_STAFF',
+                              targetType: 'staff',
+                              targetId: m.uid,
+                              details: `Removed ${m.email} from staff directory.`,
+                            });
+                            showNotice(`Removed ${m.displayName} from staff directory.`);
+                          } catch (err) {
+                            showError(err instanceof Error ? err.message : 'Unable to remove staff member.');
+                            handleFirestoreError(err, OperationType.DELETE, `staff/${m.uid}`);
+                          }
                         }}
-                        className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                        className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 cursor-pointer"
                         aria-label="Remove Staff"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -2492,6 +3329,35 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
+            <span className="text-slate-700">Default Allowed Payment Durations (Max 5 Months):</span>
+            {[1, 2, 3, 4, 5].map((m) => {
+              const currentDurations = settingsForm.allowedDurations?.length
+                ? settingsForm.allowedDurations
+                : [1, 2, 3, 4, 5];
+              const checked = currentDurations.includes(m);
+              return (
+                <label key={m} className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...currentDurations, m].sort((a, b) => a - b)
+                        : currentDurations.filter((d) => d !== m);
+                      setSettingsForm({
+                        ...settingsForm,
+                        allowedDurations: next.length > 0 ? next : [1],
+                      });
+                    }}
+                    className="accent-emerald-700"
+                  />
+                  {m === 1 ? 'Full Pay' : `${m} Months`}
+                </label>
+              );
+            })}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Instalment Terms</label>
@@ -2527,6 +3393,17 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               />
             </div>
             <div>
+              <label className="block font-semibold text-slate-700 mb-1">Privacy Policy</label>
+              <textarea
+                rows={3}
+                value={settingsForm.privacyPolicy}
+                onChange={(e) =>
+                  setSettingsForm({ ...settingsForm, privacyPolicy: e.target.value })
+                }
+                className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-xs"
+              />
+            </div>
+            <div className="md:col-span-2">
               <label className="block font-semibold text-slate-700 mb-1">
                 Terms &amp; Conditions
               </label>
@@ -2543,9 +3420,10 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
 
           <button
             type="submit"
-            className="px-6 py-3 rounded-xl bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 cursor-pointer"
+            disabled={savingSettings}
+            className="px-6 py-3 rounded-xl bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
           >
-            Save Store Configuration
+            {savingSettings ? 'Saving Configuration...' : 'Save Store Configuration'}
           </button>
         </form>
       )}
@@ -2557,17 +3435,59 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (savingProduct) return;
+              const safeName = editingProduct.name.trim().slice(0, 160);
+              const safeModel = editingProduct.model.trim().slice(0, 100);
+              const safeSpecs = editingProduct.specs.trim().slice(0, 2000);
+              const safeDesc = editingProduct.description.trim().slice(0, 2000);
+              if (!safeName || !safeModel || !safeSpecs || !safeDesc) {
+                showError('Product name, model code, specifications, and description are required.');
+                return;
+              }
+              setSavingProduct(true);
               try {
                 await setDoc(doc(db, 'products', editingProduct.id), {
                   ...editingProduct,
+                  name: safeName,
+                  model: safeModel,
+                  specs: safeSpecs,
+                  description: safeDesc,
+                  warranty: (editingProduct.warranty || '').trim().slice(0, 200),
+                  imageUrl: (editingProduct.imageUrl || '').trim().slice(0, 295000),
+                  priceNgn: Math.max(0, Math.round(Number(editingProduct.priceNgn) || 0)),
+                  stock: Math.max(0, Math.round(Number(editingProduct.stock) || 0)),
+                  lowStockThreshold: Math.max(0, Math.round(Number(editingProduct.lowStockThreshold) || 0)),
                   isDemo: false,
                   createdAt: editingProduct.createdAt || serverTimestamp(),
                   updatedAt: serverTimestamp(),
                 });
-                showNotice(`Saved product ${editingProduct.name}.`);
+                await writeAuditLog({
+                  action: 'SAVE_PRODUCT',
+                  targetType: 'product',
+                  targetId: editingProduct.id,
+                  details: `Saved product ${safeName} (${safeModel}).`,
+                });
+                if (notifyUsersOnProductSave && editingProduct.isPublished && usersList.length > 0) {
+                  const safePrice = Math.max(0, Math.round(Number(editingProduct.priceNgn) || 0));
+                  await broadcastToAllCustomers({
+                    subject: `New Product Alert: ${safeName} at OFFNOT ENERGY`,
+                    message: `Good news! ${safeName} (${safeModel}) is now available in our ${editingProduct.category} catalog.\n\nPrice: ${
+                      safePrice > 0 ? formatNgn(safePrice) : 'Contact Branch for Price'
+                    }\nSpecs: ${safeSpecs}\n\n${safeDesc}\n\nShop online or visit our Dugbe and Dalute branches in Ibadan.`,
+                    campaignType: 'new_product',
+                    notifType: 'NEW_PRODUCT_ANNOUNCEMENT',
+                  });
+                  showNotice(`Saved ${safeName} and emailed/notified all ${usersList.length} customers.`);
+                } else {
+                  showNotice(`Saved product ${safeName}.`);
+                }
+                setNotifyUsersOnProductSave(false);
                 setShowProductModal(false);
               } catch (err) {
+                showError(err instanceof Error ? err.message : 'Unable to save product.');
                 handleFirestoreError(err, OperationType.WRITE, `products/${editingProduct.id}`);
+              } finally {
+                setSavingProduct(false);
               }
             }}
             className="bg-white rounded-2xl border border-slate-200 max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4"
@@ -2672,8 +3592,12 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const url = await compressImageToDataUrl(file);
-                      setEditingProduct({ ...editingProduct, imageUrl: url });
+                      try {
+                        const url = await compressImageToDataUrl(file);
+                        setEditingProduct({ ...editingProduct, imageUrl: url });
+                      } catch (err) {
+                        showError(err instanceof Error ? err.message : 'Unable to process image.');
+                      }
                     }}
                   />
                 </label>
@@ -2711,7 +3635,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               />
             </div>
 
-            <div className="flex items-center gap-6 text-xs font-semibold">
+            <div className="flex flex-wrap items-center gap-6 text-xs font-semibold">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -2734,13 +3658,25 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 />
                 Best Seller
               </label>
+              {canSendCampaigns && (
+                <label className="flex items-center gap-2 cursor-pointer text-emerald-800">
+                  <input
+                    type="checkbox"
+                    checked={notifyUsersOnProductSave}
+                    onChange={(e) => setNotifyUsersOnProductSave(e.target.checked)}
+                    className="accent-emerald-700"
+                  />
+                  Email &amp; notify all users about this new product
+                </label>
+              )}
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 cursor-pointer"
+              disabled={savingProduct}
+              className="w-full py-3 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
             >
-              Save Product
+              {savingProduct ? 'Saving Product...' : 'Save Product'}
             </button>
           </form>
         </div>
@@ -2752,9 +3688,57 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (savingPackage) return;
+              const safeName = editingPackage.name.trim().slice(0, 160);
+              const safeKva = editingPackage.capacityKva.trim().slice(0, 60);
+              const safeInv = editingPackage.inverterCapacity.trim().slice(0, 120);
+              const safeBat = editingPackage.batteryCapacity.trim().slice(0, 120);
+              const safeTech = editingPackage.batteryTechnology.trim().slice(0, 120);
+              const safeWatt = editingPackage.panelWattage.trim().slice(0, 100);
+              const safeAcc = editingPackage.accessoriesIncluded.trim().slice(0, 1000);
+              const safeInst = editingPackage.installationDetails.trim().slice(0, 1000);
+              const safeWar = editingPackage.warrantyInfo.trim().slice(0, 500);
+              const safeDesc = editingPackage.description.trim().slice(0, 2500);
+              if (
+                !safeName ||
+                !safeKva ||
+                !safeInv ||
+                !safeBat ||
+                !safeTech ||
+                !safeWatt ||
+                !safeAcc ||
+                !safeInst ||
+                !safeWar ||
+                !safeDesc
+              ) {
+                showError('Please fill in all required solar package fields.');
+                return;
+              }
+              setSavingPackage(true);
               try {
                 await setDoc(doc(db, 'packages', editingPackage.id), {
                   ...editingPackage,
+                  name: safeName,
+                  capacityKva: safeKva,
+                  inverterCapacity: safeInv,
+                  batteryCapacity: safeBat,
+                  batteryTechnology: safeTech,
+                  panelQuantity: Math.max(0, Math.round(Number(editingPackage.panelQuantity) || 0)),
+                  panelWattage: safeWatt,
+                  accessoriesIncluded: safeAcc,
+                  installationDetails: safeInst,
+                  warrantyInfo: safeWar,
+                  description: safeDesc,
+                  imageUrl: (editingPackage.imageUrl || '').trim().slice(0, 295000),
+                  priceNgn: Math.max(0, Math.round(Number(editingPackage.priceNgn) || 0)),
+                  initialDepositPercent: Math.min(
+                    90,
+                    Math.max(0, Number(editingPackage.initialDepositPercent) || 0)
+                  ),
+                  adminChargePercent: Math.min(
+                    50,
+                    Math.max(0, Number(editingPackage.adminChargePercent) || 0)
+                  ),
                   allowedDurations:
                     editingPackage.allowedDurations.length > 0
                       ? editingPackage.allowedDurations
@@ -2763,10 +3747,37 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                   createdAt: editingPackage.createdAt || serverTimestamp(),
                   updatedAt: serverTimestamp(),
                 });
-                showNotice(`Saved solar package ${editingPackage.name}.`);
+                await writeAuditLog({
+                  action: 'SAVE_PACKAGE',
+                  targetType: 'package',
+                  targetId: editingPackage.id,
+                  details: `Saved solar package ${safeName} (${safeKva}).`,
+                });
+                if (notifyUsersOnPackageSave && editingPackage.isPublished && usersList.length > 0) {
+                  const safePrice = Math.max(0, Math.round(Number(editingPackage.priceNgn) || 0));
+                  await broadcastToAllCustomers({
+                    subject: `New Solar Package Launch: ${safeName} (${safeKva})`,
+                    message: `Introducing ${safeName} (${safeKva}) at OFFNOT ENERGY!\n\nPrice: ${formatNgn(
+                      safePrice
+                    )}\nSpecs: ${safeInv} · ${safeBat} · ${
+                      Math.max(0, Math.round(Number(editingPackage.panelQuantity) || 0))
+                    } Solar Panels (${safeWatt})\n\n${safeDesc}\n\nEligible for full payment or up to 5-month flexible instalments.`,
+                    campaignType: 'new_product',
+                    notifType: 'NEW_PRODUCT_ANNOUNCEMENT',
+                  });
+                  showNotice(
+                    `Saved ${safeName} and emailed/notified all ${usersList.length} customers.`
+                  );
+                } else {
+                  showNotice(`Saved solar package ${safeName}.`);
+                }
+                setNotifyUsersOnPackageSave(false);
                 setShowPackageModal(false);
               } catch (err) {
+                showError(err instanceof Error ? err.message : 'Unable to save solar package.');
                 handleFirestoreError(err, OperationType.WRITE, `packages/${editingPackage.id}`);
+              } finally {
+                setSavingPackage(false);
               }
             }}
             className="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4"
@@ -2891,8 +3902,12 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const url = await compressImageToDataUrl(file);
-                      setEditingPackage({ ...editingPackage, imageUrl: url });
+                      try {
+                        const url = await compressImageToDataUrl(file);
+                        setEditingPackage({ ...editingPackage, imageUrl: url });
+                      } catch (err) {
+                        showError(err instanceof Error ? err.message : 'Unable to process image.');
+                      }
                     }}
                   />
                 </label>
@@ -3010,7 +4025,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               ))}
             </div>
 
-            <div className="flex items-center gap-6 text-xs font-semibold">
+            <div className="flex flex-wrap items-center gap-6 text-xs font-semibold">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -3033,13 +4048,25 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
                 />
                 Featured on Homepage
               </label>
+              {canSendCampaigns && (
+                <label className="flex items-center gap-2 cursor-pointer text-emerald-800">
+                  <input
+                    type="checkbox"
+                    checked={notifyUsersOnPackageSave}
+                    onChange={(e) => setNotifyUsersOnPackageSave(e.target.checked)}
+                    className="accent-emerald-700"
+                  />
+                  Email &amp; notify all users about this new package
+                </label>
+              )}
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 cursor-pointer"
+              disabled={savingPackage}
+              className="w-full py-3 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
             >
-              Save Solar Package
+              {savingPackage ? 'Saving Solar Package...' : 'Save Solar Package'}
             </button>
           </form>
         </div>
@@ -3066,25 +4093,33 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               placeholder="Optional approval or decline notes..."
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
             />
+            {approvalError && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-2.5 text-xs text-red-700">
+                {approvalError}
+              </div>
+            )}
             <div className="flex gap-3">
               <button
                 type="button"
+                disabled={decidingApproval}
                 onClick={() => handleDecisionApproval('APPROVED')}
-                className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+                className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 disabled:opacity-60 cursor-pointer"
               >
-                Approve Application
+                {decidingApproval ? 'Saving...' : 'Approve Application'}
               </button>
               <button
                 type="button"
+                disabled={decidingApproval}
                 onClick={() => handleDecisionApproval('REJECTED')}
-                className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 cursor-pointer"
+                className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60 cursor-pointer"
               >
-                Decline
+                {decidingApproval ? 'Saving...' : 'Decline'}
               </button>
               <button
                 type="button"
+                disabled={decidingApproval}
                 onClick={() => setApprovalOrder(null)}
-                className="px-3 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold cursor-pointer"
+                className="px-3 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold disabled:opacity-60 cursor-pointer"
               >
                 Cancel
               </button>
@@ -3143,12 +4178,14 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             <div className="flex gap-3">
               <button
                 type="submit"
-                className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                disabled={savingManualPay}
+                className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold disabled:opacity-60 cursor-pointer"
               >
-                Save Verified Payment
+                {savingManualPay ? 'Saving...' : 'Save Verified Payment'}
               </button>
               <button
                 type="button"
+                disabled={savingManualPay}
                 onClick={() => setManualPayOrder(null)}
                 className="px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold cursor-pointer"
               >
@@ -3194,12 +4231,14 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             <div className="flex gap-3">
               <button
                 type="submit"
-                className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                disabled={savingSchedule}
+                className="flex-1 py-2.5 rounded-lg bg-emerald-700 text-white text-xs font-bold disabled:opacity-60 cursor-pointer"
               >
-                Confirm Schedule
+                {savingSchedule ? 'Saving...' : 'Confirm Schedule'}
               </button>
               <button
                 type="button"
+                disabled={savingSchedule}
                 onClick={() => setScheduleOrder(null)}
                 className="px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold cursor-pointer"
               >
@@ -3238,12 +4277,14 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
             <div className="flex gap-3">
               <button
                 type="submit"
-                className="flex-1 py-2.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 cursor-pointer"
+                disabled={savingOverride}
+                className="flex-1 py-2.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-60 cursor-pointer"
               >
-                Authorize Override
+                {savingOverride ? 'Authorizing...' : 'Authorize Override'}
               </button>
               <button
                 type="button"
+                disabled={savingOverride}
                 onClick={() => setOverrideOrder(null)}
                 className="px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold cursor-pointer"
               >
