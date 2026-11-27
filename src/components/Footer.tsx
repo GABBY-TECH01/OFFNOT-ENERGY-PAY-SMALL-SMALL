@@ -1,6 +1,7 @@
 import React from 'react';
 import { ExternalLink, Mail, MapPin, Phone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useStore } from '../context/StoreContext';
 import type { PageRoute } from '../types';
 
 interface FooterProps {
@@ -10,6 +11,7 @@ interface FooterProps {
 
 export function Footer({ currentRoute, onNavigate }: FooterProps) {
   const { user } = useAuth();
+  const { logoUrl } = useStore();
   const showFullFooter = currentRoute === 'home' && !user;
   const copyrightYear = Math.max(2026, new Date().getFullYear());
 
@@ -26,7 +28,7 @@ export function Footer({ currentRoute, onNavigate }: FooterProps) {
           <div>
             <div className="inline-block bg-white rounded-xl p-2.5 mb-4">
               <img
-                src="/assets/aistudio/IMG-20261027-WA0006_cf69d348.jpg"
+                src={logoUrl}
                 alt="OFFNOT ENERGY"
                 className="h-14 w-auto object-contain"
               />

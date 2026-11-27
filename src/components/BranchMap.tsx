@@ -107,27 +107,27 @@ export function BranchMap() {
               onClick={() => setSelectedId(branch.id)}
               className={`text-left p-5 rounded-xl border transition-colors cursor-pointer ${
                 active
-                  ? 'border-emerald-700 bg-emerald-50/60 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
+                  ? 'border-emerald-700 dark:border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold text-orange-600 mb-1">
+                  <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mb-1">
                     {branch.id === 'dugbe' ? 'Head Office · Dugbe Iyaganku Road' : 'Branch Office · Dalute Road'}
                   </p>
-                  <h3 className="text-base font-bold text-slate-900 mb-1.5">{branch.name}</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1.5">{branch.name}</h3>
                 </div>
                 <MapPin
                   className={`w-5 h-5 shrink-0 ${
-                    active ? 'text-emerald-700' : 'text-slate-400'
+                    active ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-400'
                   }`}
                 />
               </div>
-              <p className="text-sm text-slate-600 mb-3">{branch.address}</p>
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-700 font-medium">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">{branch.address}</p>
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-700 dark:text-slate-300 font-medium">
                 <span className="inline-flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                  <Phone className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
                   {branch.phone}
                 </span>
                 <span>{branch.hours}</span>
@@ -138,7 +138,7 @@ export function BranchMap() {
       </div>
 
       <div className="lg:col-span-7">
-        <div className="w-full h-[380px] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative">
+        <div className="w-full h-[320px] sm:h-[380px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 relative">
           {apiKey && isLoaded ? (
             <Map
               mapId="DEMO_MAP_ID"
@@ -159,12 +159,12 @@ export function BranchMap() {
               ))}
             </Map>
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-slate-50">
-              <MapPin className="w-8 h-8 text-emerald-700 mb-2" />
-              <p className="text-sm font-semibold text-slate-900 mb-1">
+            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-slate-50 dark:bg-slate-900">
+              <MapPin className="w-8 h-8 text-emerald-700 dark:text-emerald-400 mb-2" />
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
                 {selectedBranch.name}
               </p>
-              <p className="text-xs text-slate-600 max-w-md mb-4">{selectedBranch.address}</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mb-4">{selectedBranch.address}</p>
               <a
                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                   selectedBranch.address

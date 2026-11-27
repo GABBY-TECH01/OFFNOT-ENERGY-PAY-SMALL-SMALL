@@ -50,15 +50,15 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
   }, [initialTab]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-      <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase mb-2">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
+      <p className="text-xs font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase mb-2">
         Policies, Legal &amp; Customer Guide
       </p>
-      <h1 className="text-3xl font-extrabold text-slate-900 mb-6">
+      <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mb-6">
         OFFNOT ENERGY Policies &amp; FAQ
       </h1>
 
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-4 mb-8">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-4 mb-8">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -67,7 +67,7 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
               activeTab === tab.id
                 ? 'bg-emerald-700 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {tab.label}
@@ -75,13 +75,13 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8">
         {activeTab === 'instalment' && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               Instalment Payment Terms &amp; Delivery Policy
             </h2>
-            <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
               {storeSettings.instalmentTerms}
             </p>
           </div>
@@ -89,12 +89,12 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
 
         {activeTab === 'faq' && (
           <div className="space-y-5">
-            <h2 className="text-xl font-bold text-slate-900">Frequently Asked Questions</h2>
-            <div className="divide-y divide-slate-100">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Frequently Asked Questions</h2>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {FAQS.map((item) => (
                 <div key={item.q} className="py-4 first:pt-0 last:pb-0">
-                  <h3 className="text-sm font-bold text-slate-900 mb-1.5">{item.q}</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">{item.a}</p>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1.5">{item.q}</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{item.a}</p>
                 </div>
               ))}
             </div>
@@ -103,8 +103,8 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
 
         {activeTab === 'warranty' && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">Warranty Policy</h2>
-            <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Warranty Policy</h2>
+            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
               {storeSettings.warrantyPolicy}
             </p>
           </div>
@@ -112,8 +112,8 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
 
         {activeTab === 'returns' && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">Return &amp; Inspection Policy</h2>
-            <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Return &amp; Inspection Policy</h2>
+            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
               {storeSettings.returnPolicy}
             </p>
           </div>
@@ -121,8 +121,8 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
 
         {activeTab === 'privacy' && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">Privacy Policy</h2>
-            <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Privacy Policy</h2>
+            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
               {storeSettings.privacyPolicy}
             </p>
           </div>
@@ -130,8 +130,8 @@ export function PoliciesPage({ initialTab = 'instalment' }: PoliciesPageProps) {
 
         {activeTab === 'terms' && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">Terms and Conditions</h2>
-            <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Terms and Conditions</h2>
+            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
               {storeSettings.termsAndConditions}
             </p>
           </div>

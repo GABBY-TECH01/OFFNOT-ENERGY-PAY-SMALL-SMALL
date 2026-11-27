@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { CartItem, Product, SolarPackage } from '../types';
 import { getEffectiveProductPrice } from '../utils/instalments';
 import { useAuth } from './AuthContext';
+import { useStore } from './StoreContext';
 
 export interface PackageCheckoutSelection {
   pkg: SolarPackage;
@@ -18,6 +19,7 @@ interface CartContextValue {
   updateQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
+  reconcileWithCatalog: (products: Product[], packages?: SolarPackage[]) => void;
   packageSelection: PackageCheckoutSelection | null;
   setPackageSelection: (sel: PackageCheckoutSelection | null) => void;
   checkoutMode: 'cart' | 'package';
@@ -30,7 +32,8 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { isInstaller } = useAuth();
-  const [items, setItems] = useState<CartItem[]>(() => {
+  const { products, packages } = useStore();
+  const [rawItems, setRawItems] = useState<CartItem[]>(() => {
     try {
       const raw = localStorage.getItem(CART_STORAGE_KEY);
       if (raw) {
@@ -44,8 +47,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [isDrawerOpen, setDrawerOpen] = useState(false);
-  const [packageSelection, setPackageSelection] = useState<PackageCheckoutSelection | null>(null);
+  const [rawPackageSelection, setRawPackageSelection] = useState<PackageCheckoutSelection | null>(null);
   const [checkoutMode, setCheckoutMode] = useState<'cart' | 'package'>('cart');
+
+  // Hydrate cart items live from StoreContext so admin edits (price, stock, image, name, publish status) propagate immediately
+  const items = useMemo<CartItem[]>(() => {
+    if (products.length === 0) return rawItems;
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const resolved: CartItem[] = [];
+    for (const entry of rawItems) {
+      const live = byId.get(entry.product.id);
+      if (!live) continue;
+      if (!live.isPublished || live.stock <= 0) continue;
+      const qty = Math.min(live.stock, Math.max(1, entry.quantity));
+      resolved.push({ product: live, quantity: qty });
+    }
+    return resolved;
+  }, [rawItems, products]);
+
+  // Hydrate selected package live from StoreContext
+  const packageSelection = useMemo<PackageCheckoutSelection | null>(() => {
+    if (!rawPackageSelection) return null;
+    if (packages.length === 0) return rawPackageSelection;
+    const livePkg = packages.find((p) => p.id === rawPackageSelection.pkg.id);
+    if (!livePkg || !livePkg.isPublished) return null;
+    return { ...rawPackageSelection, pkg: livePkg };
+  }, [rawPackageSelection, packages]);
 
   useEffect(() => {
     try {
@@ -56,14 +83,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items]);
 
   const addToCart = (product: Product, quantity = 1, openDrawer = true) => {
-    if (product.stock <= 0) return;
-    setItems((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
+    const liveProduct = products.find((p) => p.id === product.id) || product;
+    if (liveProduct.stock <= 0) return;
+    setRawItems((prev) => {
+      const existing = prev.find((i) => i.product.id === liveProduct.id);
       if (existing) {
-        const nextQty = Math.min(product.stock, existing.quantity + quantity);
-        return prev.map((i) => (i.product.id === product.id ? { ...i, product, quantity: nextQty } : i));
+        const nextQty = Math.min(liveProduct.stock, existing.quantity + quantity);
+        return prev.map((i) =>
+          i.product.id === liveProduct.id ? { ...i, product: liveProduct, quantity: nextQty } : i
+        );
       }
-      return [...prev, { product, quantity: Math.min(product.stock, Math.max(1, quantity)) }];
+      return [
+        ...prev,
+        { product: liveProduct, quantity: Math.min(liveProduct.stock, Math.max(1, quantity)) },
+      ];
     });
     if (openDrawer) {
       setDrawerOpen(true);
@@ -75,20 +108,33 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeFromCart(productId);
       return;
     }
-    setItems((prev) =>
-      prev.map((i) =>
-        i.product.id === productId ? { ...i, quantity: Math.min(i.product.stock, quantity) } : i
-      )
+    const liveProduct = products.find((p) => p.id === productId);
+    setRawItems((prev) =>
+      prev.map((i) => {
+        if (i.product.id !== productId) return i;
+        const maxStock = liveProduct ? liveProduct.stock : i.product.stock;
+        return {
+          product: liveProduct || i.product,
+          quantity: Math.min(maxStock, quantity),
+        };
+      })
     );
   };
 
   const removeFromCart = (productId: string) => {
-    setItems((prev) => prev.filter((i) => i.product.id !== productId));
+    setRawItems((prev) => prev.filter((i) => i.product.id !== productId));
   };
 
   const clearCart = () => {
-    setItems([]);
+    setRawItems([]);
   };
+
+  const reconcileWithCatalog = useCallback(
+    (_latestProducts: Product[], _latestPackages?: SolarPackage[]) => {
+      // Live synchronization is automatically derived via useMemo against StoreContext
+    },
+    []
+  );
 
   const itemCount = items.reduce((acc, i) => acc + i.quantity, 0);
   const subtotalNgn = items.reduce(
@@ -108,8 +154,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         updateQuantity,
         removeFromCart,
         clearCart,
+        reconcileWithCatalog,
         packageSelection,
-        setPackageSelection,
+        setPackageSelection: setRawPackageSelection,
         checkoutMode,
         setCheckoutMode,
       }}

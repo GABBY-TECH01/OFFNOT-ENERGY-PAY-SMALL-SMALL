@@ -14,6 +14,7 @@ export function getEffectiveProductPrice(product: Product, isInstaller: boolean)
 
 export interface InstalmentCalculation {
   basePriceNgn: number;
+  instalmentSurchargeNgn: number;
   durationMonths: number;
   adminChargePercent: number;
   adminChargeNgn: number;
@@ -35,6 +36,7 @@ export function addMonthsIso(startDate: Date, monthsToAdd: number): string {
 export function calculateInstalmentPlan(params: {
   basePriceNgn: number;
   durationMonths: number;
+  instalmentSurchargeNgn?: number;
   initialDepositPercent?: number;
   adminChargePercent?: number;
   startDate?: Date;
@@ -42,34 +44,37 @@ export function calculateInstalmentPlan(params: {
   const basePriceNgn = Math.max(0, Math.round(params.basePriceNgn));
   // Strict 5-month maximum policy enforcement
   const durationMonths = Math.min(5, Math.max(1, Math.round(params.durationMonths)));
+  const instalmentSurchargeNgn =
+    durationMonths === 1 ? 0 : Math.max(0, Math.round(Number(params.instalmentSurchargeNgn || 0)));
   const adminChargePercent =
     durationMonths === 1 ? 0 : Math.max(0, Number(params.adminChargePercent || 0));
   const initialDepositPercent =
     durationMonths === 1 ? 0 : Math.max(0, Math.min(90, Number(params.initialDepositPercent || 0)));
 
   const adminChargeNgn = Math.round((basePriceNgn * adminChargePercent) / 100);
-  const totalPayableNgn = basePriceNgn + adminChargeNgn;
+  const totalPayableNgn = basePriceNgn + instalmentSurchargeNgn + adminChargeNgn;
   const start = params.startDate ?? new Date();
 
   if (durationMonths === 1) {
     const dueDate = addMonthsIso(start, 0);
     return {
       basePriceNgn,
+      instalmentSurchargeNgn: 0,
       durationMonths: 1,
       adminChargePercent: 0,
       adminChargeNgn: 0,
-      totalPayableNgn,
+      totalPayableNgn: basePriceNgn,
       initialDepositPercent: 0,
-      initialDepositNgn: totalPayableNgn,
+      initialDepositNgn: basePriceNgn,
       remainingPrincipalNgn: 0,
-      monthlyInstalmentNgn: totalPayableNgn,
+      monthlyInstalmentNgn: basePriceNgn,
       nextPaymentDueDate: dueDate,
       schedule: [
         {
           instalmentNumber: 1,
           label: 'Full Payment (100%)',
           dueDate,
-          amountNgn: totalPayableNgn,
+          amountNgn: basePriceNgn,
           status: 'PENDING',
         },
       ],
@@ -106,6 +111,7 @@ export function calculateInstalmentPlan(params: {
 
     return {
       basePriceNgn,
+      instalmentSurchargeNgn,
       durationMonths,
       adminChargePercent,
       adminChargeNgn,
@@ -136,6 +142,7 @@ export function calculateInstalmentPlan(params: {
 
   return {
     basePriceNgn,
+    instalmentSurchargeNgn,
     durationMonths,
     adminChargePercent,
     adminChargeNgn,
@@ -149,8 +156,22 @@ export function calculateInstalmentPlan(params: {
   };
 }
 
+export const INSTALLER_WHATSAPP_GROUP_URL =
+  'https://chat.whatsapp.com/L1Fp8uHF0wcBbmSBiOS6eK?s=cl&iam=2';
+
 export function buildWhatsAppLink(message: string, phoneNumber = '2347047053453'): string {
   return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+}
+
+export function formatCustomerWhatsAppLink(phone: string, message?: string): string | null {
+  const digits = phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+  if (!digits || digits.length < 7) return null;
+  let normalized = digits;
+  if (normalized.startsWith('0') && normalized.length >= 10) {
+    normalized = `234${normalized.slice(1)}`;
+  }
+  const base = `https://wa.me/${normalized}`;
+  return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
 
 export function formatOrderStatusLabel(status: string): string {
@@ -171,6 +192,10 @@ export function formatOrderStatusLabel(status: string): string {
       return 'CANCELLED';
     case 'REJECTED':
       return 'APPLICATION DECLINED';
+    case 'REFUND_REQUESTED':
+      return 'REFUND REQUESTED';
+    case 'REFUNDED':
+      return 'REFUNDED';
     default:
       return status;
   }

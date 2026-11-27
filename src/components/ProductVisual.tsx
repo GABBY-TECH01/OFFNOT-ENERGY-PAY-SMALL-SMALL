@@ -32,14 +32,25 @@ export function ProductVisual({
   }, [imageUrl]);
 
   if (imageUrl && !imgError) {
+    const isStudioProduct =
+      imageUrl.startsWith('/assets/products/') &&
+      !imageUrl.includes('solar_package');
     return (
-      <div className={`relative overflow-hidden bg-slate-50 ${className}`}>
+      <div
+        className={`relative overflow-hidden ${
+          isStudioProduct
+            ? 'bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 p-3 flex items-center justify-center'
+            : 'bg-slate-50 dark:bg-slate-900'
+        } ${className}`}
+      >
         <img
           src={imageUrl}
           alt={alt}
           referrerPolicy="no-referrer"
           onError={() => setImgError(true)}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          className={`w-full h-full transition-transform duration-300 group-hover:scale-[1.03] ${
+            isStudioProduct ? 'object-contain rounded-lg bg-white' : 'object-cover'
+          }`}
         />
       </div>
     );
@@ -48,23 +59,23 @@ export function ProductVisual({
   const getIconAndAccent = () => {
     switch (category) {
       case 'Hybrid Inverters':
-        return { Icon: Cpu, label: 'HYBRID INVERTER', accent: 'text-emerald-700', bg: 'from-emerald-50 via-white to-slate-50' };
+        return { Icon: Cpu, label: 'HYBRID INVERTER', accent: 'text-emerald-700 dark:text-emerald-400', bg: 'from-emerald-50 via-white to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/30' };
       case 'Lithium Batteries':
       case 'Tubular Batteries':
-        return { Icon: BatteryCharging, label: category.toUpperCase(), accent: 'text-emerald-700', bg: 'from-slate-50 via-white to-emerald-50' };
+        return { Icon: BatteryCharging, label: category.toUpperCase(), accent: 'text-emerald-700 dark:text-emerald-400', bg: 'from-slate-50 via-white to-emerald-50 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/30' };
       case 'Solar Panels':
-        return { Icon: Sun, label: 'PHOTOVOLTAIC ARRAY', accent: 'text-orange-600', bg: 'from-orange-50/60 via-white to-emerald-50/50' };
+        return { Icon: Sun, label: 'PHOTOVOLTAIC ARRAY', accent: 'text-orange-600 dark:text-orange-400', bg: 'from-orange-50/60 via-white to-emerald-50/50 dark:from-slate-900 dark:via-slate-900 dark:to-orange-950/20' };
       case 'Solar Generators':
       case 'Portable Power Stations':
-        return { Icon: Zap, label: category.toUpperCase(), accent: 'text-orange-600', bg: 'from-slate-50 via-white to-orange-50/60' };
+        return { Icon: Zap, label: category.toUpperCase(), accent: 'text-orange-600 dark:text-orange-400', bg: 'from-slate-50 via-white to-orange-50/60 dark:from-slate-900 dark:via-slate-900 dark:to-orange-950/20' };
       case 'Solar Cables':
-        return { Icon: Cable, label: 'SOLAR DC CABLING', accent: 'text-slate-700', bg: 'from-slate-100 via-white to-slate-50' };
+        return { Icon: Cable, label: 'SOLAR DC CABLING', accent: 'text-slate-700 dark:text-slate-300', bg: 'from-slate-100 via-white to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800' };
       case 'Surge Protection Devices':
-        return { Icon: ShieldCheck, label: 'SURGE PROTECTION', accent: 'text-emerald-700', bg: 'from-emerald-50/70 via-white to-slate-50' };
+        return { Icon: ShieldCheck, label: 'SURGE PROTECTION', accent: 'text-emerald-700 dark:text-emerald-400', bg: 'from-emerald-50/70 via-white to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/30' };
       case 'Solar Accessories':
-        return { Icon: Package, label: 'SOLAR ACCESSORIES', accent: 'text-slate-700', bg: 'from-slate-50 via-white to-emerald-50/40' };
+        return { Icon: Package, label: 'SOLAR ACCESSORIES', accent: 'text-slate-700 dark:text-slate-300', bg: 'from-slate-50 via-white to-emerald-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800' };
       default:
-        return { Icon: Sun, label: 'COMPLETE SOLAR SYSTEM', accent: 'text-emerald-700', bg: 'from-emerald-50 via-white to-orange-50/50' };
+        return { Icon: Sun, label: 'COMPLETE SOLAR SYSTEM', accent: 'text-emerald-700 dark:text-emerald-400', bg: 'from-emerald-50 via-white to-orange-50/50 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/30' };
     }
   };
 
@@ -72,12 +83,12 @@ export function ProductVisual({
 
   return (
     <div
-      className={`relative overflow-hidden bg-gradient-to-br ${bg} border-b border-slate-100 flex flex-col items-center justify-center p-6 ${className}`}
+      className={`relative overflow-hidden bg-gradient-to-br ${bg} border-b border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center p-6 ${className}`}
     >
       {/* Subtle architectural grid backdrop */}
       <svg
         aria-hidden="true"
-        className="absolute inset-0 w-full h-full opacity-[0.07] text-emerald-900"
+        className="absolute inset-0 w-full h-full opacity-[0.07] dark:opacity-[0.12] text-emerald-900 dark:text-emerald-400"
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
@@ -89,10 +100,10 @@ export function ProductVisual({
       </svg>
 
       <div className="relative z-10 flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex items-center justify-center mb-3">
+        <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm flex items-center justify-center mb-3">
           <Icon className={`w-8 h-8 ${accent}`} strokeWidth={1.75} />
         </div>
-        <span className="text-[11px] font-semibold tracking-wider text-slate-500">
+        <span className="text-[11px] font-semibold tracking-wider text-slate-500 dark:text-slate-400">
           {capacityLabel ? `${capacityLabel} · ${label}` : label}
         </span>
       </div>
@@ -102,7 +113,7 @@ export function ProductVisual({
 
 export function HeroSolarIllustration() {
   return (
-    <div className="relative w-full h-full min-h-[340px] lg:min-h-[460px] rounded-2xl overflow-hidden border border-slate-200 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 flex flex-col justify-between shadow-lg">
+    <div className="relative w-full h-full min-h-[300px] sm:min-h-[340px] lg:min-h-[460px] rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 flex flex-col justify-between shadow-lg">
       {/* Architectural solar vector schematic */}
       <svg
         aria-hidden="true"

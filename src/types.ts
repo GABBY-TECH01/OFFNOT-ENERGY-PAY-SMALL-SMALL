@@ -63,6 +63,7 @@ export interface UserProfile {
   email: string;
   phone?: string;
   accountType?: AccountPricingType;
+  installerNetworkJoined?: boolean;
   defaultAddress?: string;
   defaultCity?: string;
   defaultState?: string;
@@ -145,6 +146,8 @@ export interface SolarPackage {
   warrantyInfo: string;
   description: string;
   priceNgn: number;
+  instalmentSurchargeNgn?: number;
+  loadCapacity?: string;
   imageUrl?: string;
   allowedDurations: number[];
   initialDepositPercent?: number;
@@ -184,10 +187,19 @@ export type OrderStatus =
   | 'SCHEDULED_FOR_INSTALLATION'
   | 'COMPLETED'
   | 'CANCELLED'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'REFUND_REQUESTED'
+  | 'REFUNDED';
 
 export type ApprovalStatus = 'NOT_REQUIRED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
-export type PaymentStatus = 'UNPAID' | 'AWAITING_VERIFICATION' | 'PARTIALLY_PAID' | 'FULLY_PAID';
+export type PaymentStatus =
+  | 'UNPAID'
+  | 'AWAITING_VERIFICATION'
+  | 'PARTIALLY_PAID'
+  | 'FULLY_PAID'
+  | 'REFUNDED';
+
+export type RefundStatus = 'NONE' | 'REQUESTED' | 'APPROVED' | 'REFUNDED' | 'DECLINED';
 
 export interface Order {
   id: string;
@@ -201,6 +213,7 @@ export interface Order {
   packageId?: string;
   packageName?: string;
   subtotalNgn: number;
+  instalmentSurchargeNgn?: number;
   deliveryFeeNgn?: number;
   installationFeeNgn?: number;
   adminChargeNgn?: number;
@@ -229,6 +242,10 @@ export interface Order {
   overrideApplied?: boolean;
   overrideBy?: string;
   overrideReason?: string;
+  refundStatus?: RefundStatus;
+  refundAmountNgn?: number;
+  refundRequestedAt?: string;
+  refundNotes?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -245,10 +262,45 @@ export interface PaymentRecord {
   amountNgn: number;
   method: 'paystack' | 'flutterwave' | 'bank_transfer' | 'branch_cash';
   channel?: string;
-  status: 'PENDING_VERIFICATION' | 'VERIFIED' | 'FAILED';
+  status: 'PENDING_VERIFICATION' | 'VERIFIED' | 'FAILED' | 'REFUNDED';
   instalmentNumber?: number;
   verifiedBy?: string;
   notes?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface RefundRequest {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  userId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  amountRequestedNgn: number;
+  reason: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  status: 'REQUESTED' | 'APPROVED' | 'REFUNDED' | 'DECLINED';
+  adminNotes?: string;
+  refundReference?: string;
+  processedBy?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface BannerSlide {
+  id: string;
+  title: string;
+  subtitle?: string;
+  ctaText: string;
+  ctaRoute: PageRoute;
+  imageUrl?: string;
+  themeVariant?: 'emerald' | 'slate' | 'orange' | 'teal';
+  sortOrder: number;
+  isActive: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -321,6 +373,8 @@ export interface StoreSetting {
   autoHappyNewMonth?: boolean;
   happyNewMonthMessage?: string;
   lastNewMonthSent?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
   updatedAt?: unknown;
 }
 

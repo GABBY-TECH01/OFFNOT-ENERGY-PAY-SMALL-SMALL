@@ -10,6 +10,7 @@
         "email": { "type": "string", "format": "email", "maxLength": 160 },
         "phone": { "type": "string", "maxLength": 32 },
         "accountType": { "type": "string", "enum": ["installer", "end_user"] },
+        "installerNetworkJoined": { "type": "boolean" },
         "defaultAddress": { "type": "string", "maxLength": 300 },
         "defaultCity": { "type": "string", "maxLength": 100 },
         "defaultState": { "type": "string", "maxLength": 80 },
@@ -117,6 +118,8 @@
         "warrantyInfo": { "type": "string", "maxLength": 500 },
         "description": { "type": "string", "maxLength": 2500 },
         "priceNgn": { "type": "number" },
+        "instalmentSurchargeNgn": { "type": "number" },
+        "loadCapacity": { "type": "string", "maxLength": 1000 },
         "imageUrl": { "type": "string", "maxLength": 300000 },
         "allowedDurations": { "type": "array" },
         "initialDepositPercent": { "type": "number" },
@@ -145,6 +148,7 @@
         "packageId": { "type": "string", "maxLength": 128 },
         "packageName": { "type": "string", "maxLength": 160 },
         "subtotalNgn": { "type": "number" },
+        "instalmentSurchargeNgn": { "type": "number" },
         "deliveryFeeNgn": { "type": "number" },
         "installationFeeNgn": { "type": "number" },
         "adminChargeNgn": { "type": "number" },
@@ -158,8 +162,8 @@
         "approvalStatus": { "type": "string", "enum": ["NOT_REQUIRED", "PENDING_APPROVAL", "APPROVED", "REJECTED"] },
         "approvalNotes": { "type": "string", "maxLength": 500 },
         "approvedBy": { "type": "string", "maxLength": 160 },
-        "paymentStatus": { "type": "string", "enum": ["UNPAID", "AWAITING_VERIFICATION", "PARTIALLY_PAID", "FULLY_PAID"] },
-        "orderStatus": { "type": "string", "enum": ["PENDING_APPROVAL", "AWAITING_PAYMENT", "IN_INSTALMENT", "FULLY_PAID_AWAITING_DELIVERY", "SCHEDULED_FOR_INSTALLATION", "COMPLETED", "CANCELLED", "REJECTED"] },
+        "paymentStatus": { "type": "string", "enum": ["UNPAID", "AWAITING_VERIFICATION", "PARTIALLY_PAID", "FULLY_PAID", "REFUNDED"] },
+        "orderStatus": { "type": "string", "enum": ["PENDING_APPROVAL", "AWAITING_PAYMENT", "IN_INSTALMENT", "FULLY_PAID_AWAITING_DELIVERY", "SCHEDULED_FOR_INSTALLATION", "COMPLETED", "CANCELLED", "REJECTED", "REFUND_REQUESTED", "REFUNDED"] },
         "deliveryAuthorized": { "type": "boolean" },
         "deliveryAddress": { "type": "string", "maxLength": 350 },
         "deliveryState": { "type": "string", "maxLength": 80 },
@@ -173,6 +177,10 @@
         "overrideApplied": { "type": "boolean" },
         "overrideBy": { "type": "string", "maxLength": 160 },
         "overrideReason": { "type": "string", "maxLength": 500 },
+        "refundStatus": { "type": "string", "enum": ["NONE", "REQUESTED", "APPROVED", "REFUNDED", "DECLINED"] },
+        "refundAmountNgn": { "type": "number" },
+        "refundRequestedAt": { "type": "string", "maxLength": 50 },
+        "refundNotes": { "type": "string", "maxLength": 1000 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -194,7 +202,7 @@
         "amountNgn": { "type": "number" },
         "method": { "type": "string", "enum": ["paystack", "flutterwave", "bank_transfer", "branch_cash"] },
         "channel": { "type": "string", "maxLength": 60 },
-        "status": { "type": "string", "enum": ["PENDING_VERIFICATION", "VERIFIED", "FAILED"] },
+        "status": { "type": "string", "enum": ["PENDING_VERIFICATION", "VERIFIED", "FAILED", "REFUNDED"] },
         "instalmentNumber": { "type": "number" },
         "verifiedBy": { "type": "string", "maxLength": 160 },
         "notes": { "type": "string", "maxLength": 500 },
@@ -295,9 +303,56 @@
         "autoHappyNewMonth": { "type": "boolean" },
         "happyNewMonthMessage": { "type": "string", "maxLength": 2000 },
         "lastNewMonthSent": { "type": "string", "maxLength": 20 },
+        "logoUrl": { "type": "string", "maxLength": 300000 },
+        "faviconUrl": { "type": "string", "maxLength": 300000 },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "updatedAt"]
+    },
+    "BannerSlide": {
+      "title": "BannerSlide",
+      "description": "Header-width slideshow banner managed by Super Administrator",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 160 },
+        "subtitle": { "type": "string", "maxLength": 200 },
+        "ctaText": { "type": "string", "maxLength": 60 },
+        "ctaRoute": { "type": "string", "enum": ["home", "shop", "packages", "how-it-works", "services", "about", "contact", "policies", "account"] },
+        "imageUrl": { "type": "string", "maxLength": 300000 },
+        "themeVariant": { "type": "string", "maxLength": 40 },
+        "sortOrder": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "ctaText", "ctaRoute", "sortOrder", "isActive", "createdAt", "updatedAt"]
+    },
+    "RefundRequest": {
+      "title": "RefundRequest",
+      "description": "Customer refund request tied to a paid order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 40 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 120 },
+        "customerEmail": { "type": "string", "maxLength": 160 },
+        "customerPhone": { "type": "string", "maxLength": 32 },
+        "amountRequestedNgn": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "bankName": { "type": "string", "maxLength": 120 },
+        "accountNumber": { "type": "string", "maxLength": 30 },
+        "accountName": { "type": "string", "maxLength": 160 },
+        "status": { "type": "string", "enum": ["REQUESTED", "APPROVED", "REFUNDED", "DECLINED"] },
+        "adminNotes": { "type": "string", "maxLength": 1000 },
+        "refundReference": { "type": "string", "maxLength": 120 },
+        "processedBy": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderId", "orderNumber", "userId", "customerName", "customerEmail", "amountRequestedNgn", "reason", "bankName", "accountNumber", "accountName", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -351,7 +406,15 @@
     },
     "/settings/{settingId}": {
       "schema": { "$ref": "#/entities/StoreSetting" },
-      "description": "Storewide instalment settings, bank details, and legal policies"
+      "description": "Storewide instalment settings, bank details, branding, and legal policies"
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/BannerSlide" },
+      "description": "Header slideshow banners controlled exclusively by Super Administrator"
+    },
+    "/refunds/{refundId}": {
+      "schema": { "$ref": "#/entities/RefundRequest" },
+      "description": "Customer refund requests and staff refund resolution records"
     }
   }
 }

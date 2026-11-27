@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
@@ -7,10 +8,22 @@
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   }
 
+  html,
+  body {
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    max-width: 100%;
+  }
+
   body {
     font-family: var(--font-body);
     color: #0f172a;
     background-color: #ffffff;
+  }
+
+  html.dark body {
+    color: #f1f5f9;
+    background-color: #020617;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -20,6 +33,15 @@
   .font-mono-num {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Prevent iOS Safari automatic zoom on focused form controls */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 

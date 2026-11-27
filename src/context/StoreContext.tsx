@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   collection,
   doc,
@@ -10,25 +10,40 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import type {
+  BannerSlide,
   GatewayConfig,
   NotificationLog,
   Order,
   PaymentRecord,
   Product,
+  RefundRequest,
   Review,
   SolarPackage,
   StoreSetting,
 } from '../types';
-import { DEFAULT_STORE_SETTINGS, DEMO_PACKAGES, OFFNOT_PRODUCTS } from '../utils/seedData';
+import {
+  DEFAULT_BANNER_SLIDES,
+  DEFAULT_FAVICON_URL,
+  DEFAULT_LOGO_URL,
+  DEFAULT_STORE_SETTINGS,
+  OFFNOT_PACKAGES,
+  OFFNOT_PRODUCTS,
+  seedInitialCatalogIfAdmin,
+} from '../utils/seedData';
 import { useAuth } from './AuthContext';
 
 interface StoreContextValue {
   products: Product[];
   packages: SolarPackage[];
   storeSettings: StoreSetting;
+  logoUrl: string;
+  faviconUrl: string;
+  banners: BannerSlide[];
+  activeBanners: BannerSlide[];
   reviews: Review[];
   customerOrders: Order[];
   customerPayments: PaymentRecord[];
+  customerRefunds: RefundRequest[];
   customerNotifications: NotificationLog[];
   gatewayConfig: GatewayConfig;
   loadingCatalog: boolean;
@@ -55,13 +70,18 @@ interface StoreContextValue {
 const StoreContext = createContext<StoreContextValue | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const { user, isStaff, authReady } = useAuth();
+  const { user, isStaff, isSuperAdmin, authReady } = useAuth();
   const [firestoreProducts, setFirestoreProducts] = useState<Product[]>([]);
   const [firestorePackages, setFirestorePackages] = useState<SolarPackage[]>([]);
+  const [hasLoadedProducts, setHasLoadedProducts] = useState(false);
+  const [hasLoadedPackages, setHasLoadedPackages] = useState(false);
+  const autoSyncedRef = useRef(false);
   const [storeSettings, setStoreSettings] = useState<StoreSetting>(DEFAULT_STORE_SETTINGS);
+  const [firestoreBanners, setFirestoreBanners] = useState<BannerSlide[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
   const [customerPayments, setCustomerPayments] = useState<PaymentRecord[]>([]);
+  const [customerRefunds, setCustomerRefunds] = useState<RefundRequest[]>([]);
   const [customerNotifications, setCustomerNotifications] = useState<NotificationLog[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig>({
@@ -100,9 +120,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       productsQuery,
       (snap) => {
         setFirestoreProducts(snap.docs.map((d) => d.data() as Product));
+        setHasLoadedProducts(true);
         setLoadingCatalog(false);
       },
       (err) => {
+        setHasLoadedProducts(true);
         setLoadingCatalog(false);
         handleFirestoreError(err, OperationType.LIST, 'products');
       }
@@ -116,8 +138,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       packagesQuery,
       (snap) => {
         setFirestorePackages(snap.docs.map((d) => d.data() as SolarPackage));
+        setHasLoadedPackages(true);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'packages')
+      (err) => {
+        setHasLoadedPackages(true);
+        handleFirestoreError(err, OperationType.LIST, 'packages');
+      }
     );
 
     const unsubSettings = onSnapshot(
@@ -142,19 +168,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'reviews')
     );
 
+    const bannersQuery = isSuperAdmin
+      ? query(collection(db, 'banners'))
+      : query(collection(db, 'banners'), where('isActive', '==', true));
+
+    const unsubBanners = onSnapshot(
+      bannersQuery,
+      (snap) => {
+        const list = snap.docs
+          .map((d) => d.data() as BannerSlide)
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        setFirestoreBanners(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'banners')
+    );
+
     return () => {
       unsubProducts();
       unsubPackages();
       unsubSettings();
       unsubReviews();
+      unsubBanners();
     };
-  }, [authReady, isStaff]);
+  }, [authReady, isStaff, isSuperAdmin]);
 
-  // Subscribe to signed-in customer's orders, payments, and notifications
+  // Subscribe to signed-in customer's orders, payments, refunds, and notifications
   useEffect(() => {
     if (!authReady || !user) {
       setCustomerOrders([]);
       setCustomerPayments([]);
+      setCustomerRefunds([]);
       setCustomerNotifications([]);
       return;
     }
@@ -200,21 +243,76 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'notifications')
     );
 
+    const unsubRefunds = onSnapshot(
+      query(collection(db, 'refunds'), where('userId', '==', user.uid)),
+      (snap) => {
+        const list = snap.docs.map((d) => d.data() as RefundRequest);
+        list.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
+        setCustomerRefunds(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'refunds')
+    );
+
     return () => {
       unsubOrders();
       unsubPayments();
       unsubNotifs();
+      unsubRefunds();
     };
   }, [authReady, user]);
 
-  const hasRealProducts = firestoreProducts.some((p) => !p.isDemo);
-  const usingDemoCatalog = firestorePackages.length === 0 || (!hasRealProducts && firestoreProducts.length > 0);
-  const products = hasRealProducts
-    ? firestoreProducts
-    : firestoreProducts.length > 0
-      ? [...OFFNOT_PRODUCTS, ...firestoreProducts.filter((fp) => !OFFNOT_PRODUCTS.some((op) => op.id === fp.id))]
-      : OFFNOT_PRODUCTS;
-  const packages = firestorePackages.length > 0 ? firestorePackages : DEMO_PACKAGES;
+  const hasOldDemoProduct = firestoreProducts.some((p) => p.isDemo);
+  const hasOldDemoPkg = firestorePackages.some(
+    (p) => p.isDemo || p.id === 'demo-offnot-4kva-package'
+  );
+  const hasOldWikiImage = firestoreProducts.some(
+    (p) => typeof p.imageUrl === 'string' && p.imageUrl.includes('wikimedia.org')
+  );
+  const missingCatalogItems =
+    firestoreProducts.length < OFFNOT_PRODUCTS.length ||
+    firestorePackages.length < OFFNOT_PACKAGES.length;
+
+  const usingDemoCatalog =
+    hasLoadedProducts &&
+    hasLoadedPackages &&
+    (firestorePackages.length === 0 ||
+      firestoreProducts.length === 0 ||
+      hasOldDemoProduct ||
+      hasOldDemoPkg ||
+      hasOldWikiImage ||
+      missingCatalogItems);
+
+  useEffect(() => {
+    if (
+      !authReady ||
+      !isSuperAdmin ||
+      !hasLoadedProducts ||
+      !hasLoadedPackages ||
+      autoSyncedRef.current
+    ) {
+      return;
+    }
+    if (usingDemoCatalog) {
+      autoSyncedRef.current = true;
+      seedInitialCatalogIfAdmin().catch((err) => {
+        console.warn('Auto catalog sync notice:', err);
+        autoSyncedRef.current = false;
+      });
+    }
+  }, [authReady, isSuperAdmin, hasLoadedProducts, hasLoadedPackages, usingDemoCatalog]);
+
+  const realFirestoreProducts = firestoreProducts.filter(
+    (p) => !p.isDemo && !(typeof p.imageUrl === 'string' && p.imageUrl.includes('wikimedia.org'))
+  );
+  const realFirestorePackages = firestorePackages.filter(
+    (p) => !p.isDemo && p.id !== 'demo-offnot-4kva-package'
+  );
+
+  const products =
+    realFirestoreProducts.length > 0 ? realFirestoreProducts : OFFNOT_PRODUCTS;
+  const packages = [
+    ...(realFirestorePackages.length > 0 ? realFirestorePackages : OFFNOT_PACKAGES),
+  ].sort((a, b) => a.priceNgn - b.priceNgn);
 
   async function submitInquiry(data: {
     name: string;
@@ -292,15 +390,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const activeFromFirestore = firestoreBanners.filter((b) => b.isActive);
+  const activeBanners =
+    activeFromFirestore.length > 0 ? activeFromFirestore : DEFAULT_BANNER_SLIDES;
+  const logoUrl = storeSettings.logoUrl?.trim() || DEFAULT_LOGO_URL;
+  const faviconUrl = storeSettings.faviconUrl?.trim() || DEFAULT_FAVICON_URL;
+
   return (
     <StoreContext.Provider
       value={{
         products,
         packages,
         storeSettings,
+        logoUrl,
+        faviconUrl,
+        banners: firestoreBanners,
+        activeBanners,
         reviews,
         customerOrders,
         customerPayments,
+        customerRefunds,
         customerNotifications,
         gatewayConfig,
         loadingCatalog,

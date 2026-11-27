@@ -125,12 +125,12 @@ export function AddressAutocomplete({
             setOpen(true);
           }}
           placeholder={placeholder}
-          className={`w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 ${className}`}
+          className={`w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 ${className}`}
         />
       </div>
 
       {open && suggestions.length > 0 && (
-        <ul className="absolute z-40 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <ul className="absolute z-40 mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {suggestions.map((s, idx) => (
             <li key={idx}>
               <button
@@ -139,9 +139,9 @@ export function AddressAutocomplete({
                   e.preventDefault();
                   void handleSelect(s);
                 }}
-                className="w-full text-left px-3.5 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 flex items-start gap-2 border-b border-slate-100 last:border-b-0 cursor-pointer"
+                className="w-full text-left px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-900 dark:hover:text-emerald-300 flex items-start gap-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer"
               >
-                <MapPin className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                <MapPin className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <span>{s.placePrediction?.text.text}</span>
               </button>
             </li>

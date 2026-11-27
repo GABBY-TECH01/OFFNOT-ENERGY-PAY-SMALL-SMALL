@@ -64,8 +64,15 @@ interface AuthContextValue {
   isStaff: boolean;
   isSuperAdmin: boolean;
   isInstaller: boolean;
+  needsCustomerOnboarding: boolean;
   accountTypeChoice: AccountPricingType | null;
   setInstallerChoice: (isInstallerChoice: boolean) => Promise<void>;
+  completeCustomerOnboarding: (params: {
+    displayName: string;
+    phone: string;
+    accountType: AccountPricingType;
+    installerNetworkJoined: boolean;
+  }) => Promise<void>;
   isBootstrapEmailUnverified: boolean;
   authReady: boolean;
   staffLoading: boolean;
@@ -77,7 +84,8 @@ interface AuthContextValue {
     email: string,
     password: string,
     phone: string,
-    selectedType?: AccountPricingType
+    selectedType?: AccountPricingType,
+    installerNetworkJoined?: boolean
   ) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
@@ -99,6 +107,7 @@ interface AuthContextValue {
     defaultCity: string;
     defaultState: string;
     accountType?: AccountPricingType;
+    installerNetworkJoined?: boolean;
   }) => Promise<void>;
   addSavedAddress: (addr: Omit<SavedAddress, 'id' | 'userId' | 'createdAt'>) => Promise<void>;
   deleteSavedAddress: (addressId: string) => Promise<void>;
@@ -134,9 +143,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isStaff = Boolean(staffRole);
   const isSuperAdmin = staffRole === 'super_admin';
-  const effectiveAccountType: AccountPricingType =
-    profile?.accountType || accountTypeChoice || 'end_user';
-  const isInstaller = effectiveAccountType === 'installer';
+  const savedPhoneDigits = (profile?.phone || '').replace(/\D/g, '');
+  const needsCustomerOnboarding = Boolean(
+    authReady &&
+      !staffLoading &&
+      user &&
+      !isStaff &&
+      profile &&
+      (savedPhoneDigits.length < 10 ||
+        (profile.accountType === 'installer' && profile.installerNetworkJoined !== true))
+  );
+  // Strictly unlock installer pricing ONLY for signed-in users who completed WhatsApp onboarding & joined the Installer Network
+  const isInstaller = Boolean(
+    user &&
+      profile?.accountType === 'installer' &&
+      savedPhoneDigits.length >= 10 &&
+      profile?.installerNetworkJoined === true
+  );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -164,13 +187,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: firebaseUser.email || '',
             phone: '',
             accountType: storedChoice || 'end_user',
+            installerNetworkJoined: false,
             defaultAddress: '',
             defaultCity: 'Ibadan',
             defaultState: 'Oyo State',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
-        } else if (storedChoice && snap.data()?.accountType !== storedChoice) {
+        } else if (
+          storedChoice &&
+          !snap.data()?.phone &&
+          snap.data()?.accountType !== storedChoice
+        ) {
           await updateDoc(userRef, {
             accountType: storedChoice,
             updatedAt: serverTimestamp(),
@@ -262,15 +290,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore storage failure
     }
-    if (auth.currentUser) {
+  }
+
+  async function completeCustomerOnboarding(params: {
+    displayName: string;
+    phone: string;
+    accountType: AccountPricingType;
+    installerNetworkJoined: boolean;
+  }) {
+    if (!user) throw new Error('You must be signed in.');
+    const digits = params.phone.replace(/\D/g, '');
+    if (digits.length < 10) {
+      throw new Error(
+        'Please enter a valid WhatsApp number (at least 10 digits) so OFFNOT ENERGY staff can follow up on you.'
+      );
+    }
+    if (params.accountType === 'installer' && !params.installerNetworkJoined) {
+      throw new Error(
+        'Installers/Dealers must join the OFFNOT ENERGY Installer Network WhatsApp group and confirm before continuing.'
+      );
+    }
+    const safeName =
+      params.displayName.trim().slice(0, 120) ||
+      profile?.displayName ||
+      user.displayName ||
+      user.email?.split('@')[0] ||
+      'OFFNOT Customer';
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        displayName: safeName,
+        phone: params.phone.trim().slice(0, 32),
+        accountType: params.accountType,
+        installerNetworkJoined: params.accountType === 'installer',
+        updatedAt: serverTimestamp(),
+      });
+      setAccountTypeChoice(params.accountType);
       try {
-        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-          accountType: nextType,
-          updatedAt: serverTimestamp(),
-        });
-      } catch (err) {
-        console.warn('Unable to update account pricing tier:', err);
+        sessionStorage.setItem(INSTALLER_CHOICE_STORAGE_KEY, params.accountType);
+      } catch {
+        // ignore
       }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
     }
   }
 
@@ -289,7 +350,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (selectedType && cred.user) {
         const userRef = doc(db, 'users', cred.user.uid);
         const snap = await getDoc(userRef);
-        if (snap.exists() && snap.data()?.accountType !== selectedType) {
+        if (snap.exists() && !snap.data()?.phone && snap.data()?.accountType !== selectedType) {
           await updateDoc(userRef, {
             accountType: selectedType,
             updatedAt: serverTimestamp(),
@@ -321,7 +382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (selectedType && cred.user) {
         const userRef = doc(db, 'users', cred.user.uid);
         const snap = await getDoc(userRef);
-        if (snap.exists() && snap.data()?.accountType !== selectedType) {
+        if (snap.exists() && !snap.data()?.phone && snap.data()?.accountType !== selectedType) {
           await updateDoc(userRef, {
             accountType: selectedType,
             updatedAt: serverTimestamp(),
@@ -339,10 +400,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     phone: string,
-    selectedType?: AccountPricingType
+    selectedType?: AccountPricingType,
+    installerNetworkJoined?: boolean
   ) {
-    setStaffLoading(true);
     const chosenType: AccountPricingType = selectedType || accountTypeChoice || 'end_user';
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      throw new Error(
+        'Please enter a valid WhatsApp number (at least 10 digits) so OFFNOT ENERGY staff can follow up on you.'
+      );
+    }
+    if (chosenType === 'installer' && !installerNetworkJoined) {
+      throw new Error(
+        'Installers/Dealers must join the OFFNOT ENERGY Installer Network WhatsApp group and confirm before registering.'
+      );
+    }
+    setStaffLoading(true);
     setAccountTypeChoice(chosenType);
     try {
       sessionStorage.setItem(INSTALLER_CHOICE_STORAGE_KEY, chosenType);
@@ -368,6 +441,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: email.trim(),
           phone: phone.trim(),
           accountType: chosenType,
+          installerNetworkJoined:
+            chosenType === 'installer' ? Boolean(installerNetworkJoined) : false,
           defaultAddress: '',
           defaultCity: 'Ibadan',
           defaultState: 'Oyo State',
@@ -497,6 +572,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     defaultCity: string;
     defaultState: string;
     accountType?: AccountPricingType;
+    installerNetworkJoined?: boolean;
   }) {
     if (!user) throw new Error('You must be signed in.');
     const safeName = updates.displayName.trim().slice(0, 120);
@@ -509,6 +585,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultCity: updates.defaultCity.trim().slice(0, 100),
         defaultState: updates.defaultState.trim().slice(0, 80),
         ...(updates.accountType ? { accountType: updates.accountType } : {}),
+        ...(typeof updates.installerNetworkJoined === 'boolean'
+          ? { installerNetworkJoined: updates.installerNetworkJoined }
+          : {}),
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
@@ -560,8 +639,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isStaff,
         isSuperAdmin,
         isInstaller,
+        needsCustomerOnboarding,
         accountTypeChoice,
         setInstallerChoice,
+        completeCustomerOnboarding,
         isBootstrapEmailUnverified,
         authReady,
         staffLoading,

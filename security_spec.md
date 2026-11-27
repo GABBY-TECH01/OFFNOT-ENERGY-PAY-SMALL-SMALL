@@ -8,6 +8,8 @@
 5. **5-Month Maximum Instalment Ceiling**: Orders with `paymentPlan == 'instalment'` must satisfy `durationMonths >= 2 && durationMonths <= 5`. Full payment orders have `durationMonths == 1`.
 6. **Immutable Audit Trail**: `auditLogs` cannot be updated or deleted by any user, including Super Administrators.
 7. **Timestamp & Key Integrity**: Every document enforces strict `keys().hasAll(...)` and `keys().hasOnly(...)` on create, `affectedKeys().hasOnly(...)` on customer updates, server `request.time` timestamps (`createdAt`, `updatedAt`), and `isValidId()` path validation.
+8. **Super-Admin-Only Branding, Banners & Order Deletion**: Only verified Super Administrators (`isSuperAdmin()`) may update website logo (`logoUrl`), favicon (`faviconUrl`), manage `banners/{bannerId}`, or delete orders (`orders/{orderId}`) and payments (`payments/{paymentId}`).
+9. **Refund Isolation & Approval Gate**: Customers can only create `refunds/{refundId}` for their own paid orders (`userId == request.auth.uid && status == 'REQUESTED'`) and cannot approve or finalize their own refund; only Accounts Staff, Managers, MD, CEO, or Super Admin can approve, mark refunded, or decline refunds.
 
 ## 2. Dirty Dozen Attack Payloads (Must Return PERMISSION_DENIED)
 1. **Self-Role Escalation**: Authenticated customer attempts `setDoc(doc(db, 'staff', uid), { uid, role: 'super_admin', active: true, ... })`.

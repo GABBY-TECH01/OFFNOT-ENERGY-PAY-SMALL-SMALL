@@ -70,12 +70,13 @@ service cloud.firestore {
     // --- Validation Blueprints ---
     function isValidUserProfile(data) {
       return data.keys().hasAll(['uid', 'displayName', 'email', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'displayName', 'email', 'phone', 'accountType', 'defaultAddress', 'defaultCity', 'defaultState', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'phone', 'accountType', 'installerNetworkJoined', 'defaultAddress', 'defaultCity', 'defaultState', 'createdAt', 'updatedAt'])
         && isValidId(data.uid)
         && isValidString(data.displayName, 1, 120)
         && isValidString(data.email, 3, 160)
         && (!('phone' in data) || isValidString(data.phone, 0, 32))
         && (!('accountType' in data) || data.accountType in ['installer', 'end_user'])
+        && (!('installerNetworkJoined' in data) || data.installerNetworkJoined is bool)
         && (!('defaultAddress' in data) || isValidString(data.defaultAddress, 0, 300))
         && (!('defaultCity' in data) || isValidString(data.defaultCity, 0, 100))
         && (!('defaultState' in data) || isValidString(data.defaultState, 0, 80))
@@ -154,7 +155,7 @@ service cloud.firestore {
 
     function isValidPackage(data) {
       return data.keys().hasAll(['id', 'name', 'capacityKva', 'inverterCapacity', 'batteryCapacity', 'batteryTechnology', 'panelQuantity', 'panelWattage', 'accessoriesIncluded', 'installationDetails', 'warrantyInfo', 'description', 'priceNgn', 'allowedDurations', 'isPublished', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'name', 'capacityKva', 'inverterCapacity', 'batteryCapacity', 'batteryTechnology', 'panelQuantity', 'panelWattage', 'accessoriesIncluded', 'installationDetails', 'warrantyInfo', 'description', 'priceNgn', 'imageUrl', 'allowedDurations', 'initialDepositPercent', 'adminChargePercent', 'isFeatured', 'isPublished', 'isDemo', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'capacityKva', 'inverterCapacity', 'batteryCapacity', 'batteryTechnology', 'panelQuantity', 'panelWattage', 'accessoriesIncluded', 'installationDetails', 'warrantyInfo', 'description', 'priceNgn', 'instalmentSurchargeNgn', 'loadCapacity', 'imageUrl', 'allowedDurations', 'initialDepositPercent', 'adminChargePercent', 'isFeatured', 'isPublished', 'isDemo', 'createdAt', 'updatedAt'])
         && isValidId(data.id)
         && isValidString(data.name, 1, 160)
         && isValidString(data.capacityKva, 1, 60)
@@ -168,6 +169,8 @@ service cloud.firestore {
         && isValidString(data.warrantyInfo, 1, 500)
         && isValidString(data.description, 1, 2500)
         && data.priceNgn is number && data.priceNgn >= 0
+        && (!('instalmentSurchargeNgn' in data) || (data.instalmentSurchargeNgn is number && data.instalmentSurchargeNgn >= 0))
+        && (!('loadCapacity' in data) || isValidString(data.loadCapacity, 0, 1000))
         && (!('imageUrl' in data) || isValidString(data.imageUrl, 0, 300000))
         && data.allowedDurations is list && data.allowedDurations.size() >= 1 && data.allowedDurations.size() <= 5 && data.allowedDurations[0] is number
         && (!('initialDepositPercent' in data) || (data.initialDepositPercent is number && data.initialDepositPercent >= 0 && data.initialDepositPercent <= 90))
@@ -181,7 +184,7 @@ service cloud.firestore {
 
     function isValidOrder(data) {
       return data.keys().hasAll(['id', 'orderNumber', 'userId', 'customerName', 'customerEmail', 'customerPhone', 'orderType', 'subtotalNgn', 'totalAmountNgn', 'amountPaidNgn', 'outstandingBalanceNgn', 'paymentPlan', 'durationMonths', 'approvalStatus', 'paymentStatus', 'orderStatus', 'deliveryAuthorized', 'deliveryAddress', 'acceptedPolicyAt', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'customerEmail', 'customerPhone', 'orderType', 'items', 'packageId', 'packageName', 'subtotalNgn', 'deliveryFeeNgn', 'installationFeeNgn', 'adminChargeNgn', 'totalAmountNgn', 'amountPaidNgn', 'outstandingBalanceNgn', 'paymentPlan', 'durationMonths', 'monthlyInstalmentNgn', 'initialDepositNgn', 'approvalStatus', 'approvalNotes', 'approvedBy', 'paymentStatus', 'orderStatus', 'deliveryAuthorized', 'deliveryAddress', 'deliveryState', 'deliveryBranch', 'deliveryScheduledDate', 'installationScheduledDate', 'completedAt', 'nextPaymentDueDate', 'schedule', 'acceptedPolicyAt', 'overrideApplied', 'overrideBy', 'overrideReason', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'customerEmail', 'customerPhone', 'orderType', 'items', 'packageId', 'packageName', 'subtotalNgn', 'instalmentSurchargeNgn', 'deliveryFeeNgn', 'installationFeeNgn', 'adminChargeNgn', 'totalAmountNgn', 'amountPaidNgn', 'outstandingBalanceNgn', 'paymentPlan', 'durationMonths', 'monthlyInstalmentNgn', 'initialDepositNgn', 'approvalStatus', 'approvalNotes', 'approvedBy', 'paymentStatus', 'orderStatus', 'deliveryAuthorized', 'deliveryAddress', 'deliveryState', 'deliveryBranch', 'deliveryScheduledDate', 'installationScheduledDate', 'completedAt', 'nextPaymentDueDate', 'schedule', 'acceptedPolicyAt', 'overrideApplied', 'overrideBy', 'overrideReason', 'refundStatus', 'refundAmountNgn', 'refundRequestedAt', 'refundNotes', 'createdAt', 'updatedAt'])
         && isValidId(data.id)
         && isValidString(data.orderNumber, 3, 40)
         && isValidId(data.userId)
@@ -193,6 +196,7 @@ service cloud.firestore {
         && (!('packageId' in data) || isValidString(data.packageId, 0, 128))
         && (!('packageName' in data) || isValidString(data.packageName, 0, 160))
         && data.subtotalNgn is number && data.subtotalNgn >= 0
+        && (!('instalmentSurchargeNgn' in data) || (data.instalmentSurchargeNgn is number && data.instalmentSurchargeNgn >= 0))
         && (!('deliveryFeeNgn' in data) || (data.deliveryFeeNgn is number && data.deliveryFeeNgn >= 0))
         && (!('installationFeeNgn' in data) || (data.installationFeeNgn is number && data.installationFeeNgn >= 0))
         && (!('adminChargeNgn' in data) || (data.adminChargeNgn is number && data.adminChargeNgn >= 0))
@@ -206,8 +210,8 @@ service cloud.firestore {
         && data.approvalStatus in ['NOT_REQUIRED', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED']
         && (!('approvalNotes' in data) || isValidString(data.approvalNotes, 0, 500))
         && (!('approvedBy' in data) || isValidString(data.approvedBy, 0, 160))
-        && data.paymentStatus in ['UNPAID', 'AWAITING_VERIFICATION', 'PARTIALLY_PAID', 'FULLY_PAID']
-        && data.orderStatus in ['PENDING_APPROVAL', 'AWAITING_PAYMENT', 'IN_INSTALMENT', 'FULLY_PAID_AWAITING_DELIVERY', 'SCHEDULED_FOR_INSTALLATION', 'COMPLETED', 'CANCELLED', 'REJECTED']
+        && data.paymentStatus in ['UNPAID', 'AWAITING_VERIFICATION', 'PARTIALLY_PAID', 'FULLY_PAID', 'REFUNDED']
+        && data.orderStatus in ['PENDING_APPROVAL', 'AWAITING_PAYMENT', 'IN_INSTALMENT', 'FULLY_PAID_AWAITING_DELIVERY', 'SCHEDULED_FOR_INSTALLATION', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REFUND_REQUESTED', 'REFUNDED']
         && data.deliveryAuthorized is bool
         && isValidString(data.deliveryAddress, 3, 350)
         && (!('deliveryState' in data) || isValidString(data.deliveryState, 0, 80))
@@ -221,6 +225,10 @@ service cloud.firestore {
         && (!('overrideApplied' in data) || data.overrideApplied is bool)
         && (!('overrideBy' in data) || isValidString(data.overrideBy, 0, 160))
         && (!('overrideReason' in data) || isValidString(data.overrideReason, 0, 500))
+        && (!('refundStatus' in data) || data.refundStatus in ['NONE', 'REQUESTED', 'APPROVED', 'REFUNDED', 'DECLINED'])
+        && (!('refundAmountNgn' in data) || (data.refundAmountNgn is number && data.refundAmountNgn >= 0))
+        && (!('refundRequestedAt' in data) || isValidString(data.refundRequestedAt, 0, 50))
+        && (!('refundNotes' in data) || isValidString(data.refundNotes, 0, 1000))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -239,7 +247,7 @@ service cloud.firestore {
         && data.amountNgn is number && data.amountNgn > 0
         && data.method in ['paystack', 'flutterwave', 'bank_transfer', 'branch_cash']
         && (!('channel' in data) || isValidString(data.channel, 0, 60))
-        && data.status in ['PENDING_VERIFICATION', 'VERIFIED', 'FAILED']
+        && data.status in ['PENDING_VERIFICATION', 'VERIFIED', 'FAILED', 'REFUNDED']
         && (!('instalmentNumber' in data) || (data.instalmentNumber is number && data.instalmentNumber >= 1 && data.instalmentNumber <= 5))
         && (!('verifiedBy' in data) || isValidString(data.verifiedBy, 0, 160))
         && (!('notes' in data) || isValidString(data.notes, 0, 500))
@@ -308,7 +316,7 @@ service cloud.firestore {
 
     function isValidStoreSetting(data) {
       return data.keys().hasAll(['id', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'allowedDurations', 'defaultInitialDepositPercent', 'defaultAdminChargePercent', 'gracePeriodDays', 'bankName', 'bankAccountName', 'bankAccountNumber', 'instalmentTerms', 'warrantyPolicy', 'returnPolicy', 'privacyPolicy', 'termsAndConditions', 'autoHappyNewMonth', 'happyNewMonthMessage', 'lastNewMonthSent', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'allowedDurations', 'defaultInitialDepositPercent', 'defaultAdminChargePercent', 'gracePeriodDays', 'bankName', 'bankAccountName', 'bankAccountNumber', 'instalmentTerms', 'warrantyPolicy', 'returnPolicy', 'privacyPolicy', 'termsAndConditions', 'autoHappyNewMonth', 'happyNewMonthMessage', 'lastNewMonthSent', 'logoUrl', 'faviconUrl', 'updatedAt'])
         && isValidId(data.id)
         && (!('allowedDurations' in data) || (data.allowedDurations is list && data.allowedDurations.size() >= 1 && data.allowedDurations.size() <= 5 && data.allowedDurations[0] is number))
         && (!('defaultInitialDepositPercent' in data) || (data.defaultInitialDepositPercent is number && data.defaultInitialDepositPercent >= 0 && data.defaultInitialDepositPercent <= 90))
@@ -325,6 +333,47 @@ service cloud.firestore {
         && (!('autoHappyNewMonth' in data) || data.autoHappyNewMonth is bool)
         && (!('happyNewMonthMessage' in data) || isValidString(data.happyNewMonthMessage, 0, 2000))
         && (!('lastNewMonthSent' in data) || isValidString(data.lastNewMonthSent, 0, 20))
+        && (!('logoUrl' in data) || isValidString(data.logoUrl, 0, 300000))
+        && (!('faviconUrl' in data) || isValidString(data.faviconUrl, 0, 300000))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBanner(data) {
+      return data.keys().hasAll(['id', 'title', 'ctaText', 'ctaRoute', 'sortOrder', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'subtitle', 'ctaText', 'ctaRoute', 'imageUrl', 'themeVariant', 'sortOrder', 'isActive', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidString(data.title, 1, 160)
+        && (!('subtitle' in data) || isValidString(data.subtitle, 0, 200))
+        && isValidString(data.ctaText, 1, 60)
+        && data.ctaRoute in ['home', 'shop', 'packages', 'how-it-works', 'services', 'about', 'contact', 'policies', 'account']
+        && (!('imageUrl' in data) || isValidString(data.imageUrl, 0, 300000))
+        && (!('themeVariant' in data) || isValidString(data.themeVariant, 0, 40))
+        && data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 1000
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRefundRequest(data) {
+      return data.keys().hasAll(['id', 'orderId', 'orderNumber', 'userId', 'customerName', 'customerEmail', 'amountRequestedNgn', 'reason', 'bankName', 'accountNumber', 'accountName', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'orderId', 'orderNumber', 'userId', 'customerName', 'customerEmail', 'customerPhone', 'amountRequestedNgn', 'reason', 'bankName', 'accountNumber', 'accountName', 'status', 'adminNotes', 'refundReference', 'processedBy', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.orderId)
+        && isValidString(data.orderNumber, 3, 40)
+        && isValidId(data.userId)
+        && isValidString(data.customerName, 1, 120)
+        && isValidString(data.customerEmail, 3, 160)
+        && (!('customerPhone' in data) || isValidString(data.customerPhone, 0, 32))
+        && data.amountRequestedNgn is number && data.amountRequestedNgn > 0
+        && isValidString(data.reason, 5, 1000)
+        && isValidString(data.bankName, 2, 120)
+        && isValidString(data.accountNumber, 5, 30)
+        && isValidString(data.accountName, 2, 160)
+        && data.status in ['REQUESTED', 'APPROVED', 'REFUNDED', 'DECLINED']
+        && (!('adminNotes' in data) || isValidString(data.adminNotes, 0, 1000))
+        && (!('refundReference' in data) || isValidString(data.refundReference, 0, 120))
+        && (!('processedBy' in data) || isValidString(data.processedBy, 0, 160))
+        && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
 
@@ -344,7 +393,7 @@ service cloud.firestore {
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'accountType', 'defaultAddress', 'defaultCity', 'defaultState', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'accountType', 'installerNetworkJoined', 'defaultAddress', 'defaultCity', 'defaultState', 'updatedAt']);
       allow delete: if isValidId(userId) && isSuperAdmin() && request.auth.uid != userId;
 
       match /addresses/{addressId} {
@@ -446,6 +495,7 @@ service cloud.firestore {
         && incoming().outstandingBalanceNgn == incoming().totalAmountNgn
         && incoming().deliveryAuthorized == false
         && !('overrideApplied' in incoming() && incoming().overrideApplied == true)
+        && (!('refundStatus' in incoming()) || incoming().refundStatus == 'NONE')
         && ((incoming().paymentPlan == 'full' && incoming().durationMonths == 1 && incoming().approvalStatus == 'NOT_REQUIRED' && incoming().orderStatus == 'AWAITING_PAYMENT')
             || (incoming().paymentPlan == 'instalment' && incoming().durationMonths >= 2 && incoming().durationMonths <= 5 && incoming().approvalStatus == 'PENDING_APPROVAL' && incoming().orderStatus == 'PENDING_APPROVAL'))
         && incoming().createdAt == request.time
@@ -472,6 +522,16 @@ service cloud.firestore {
             && incoming().amountPaidNgn == existing().amountPaidNgn
             && incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'updatedAt']))
           ||
+          // Customer requests a refund on a paid order
+          (existing().userId == request.auth.uid
+            && existing().amountPaidNgn > 0
+            && !(existing().orderStatus in ['CANCELLED', 'REJECTED', 'REFUNDED'])
+            && (!('refundStatus' in existing()) || existing().refundStatus in ['NONE', 'DECLINED'])
+            && incoming().refundStatus == 'REQUESTED'
+            && incoming().orderStatus == 'REFUND_REQUESTED'
+            && incoming().deliveryAuthorized == existing().deliveryAuthorized
+            && incoming().diff(existing()).affectedKeys().hasOnly(['refundStatus', 'refundAmountNgn', 'refundRequestedAt', 'refundNotes', 'orderStatus', 'updatedAt']))
+          ||
           // Customer gateway verified payment update
           (existing().userId == request.auth.uid
             && existing().approvalStatus in ['NOT_REQUIRED', 'APPROVED']
@@ -483,7 +543,7 @@ service cloud.firestore {
                 || (incoming().outstandingBalanceNgn > 0 && incoming().paymentStatus == 'PARTIALLY_PAID' && incoming().orderStatus == 'IN_INSTALMENT'))
             && incoming().diff(existing()).affectedKeys().hasOnly(['amountPaidNgn', 'outstandingBalanceNgn', 'paymentStatus', 'orderStatus', 'schedule', 'nextPaymentDueDate', 'updatedAt']))
           ||
-          // Staff actions: approval, payment update, delivery scheduling (strictly gated on full payment or Super Admin override)
+          // Staff actions: approval, payment update, refund resolution, delivery scheduling
           (isActiveStaff()
             && (
               // Approve or reject instalment application
@@ -500,6 +560,14 @@ service cloud.firestore {
                 && incoming().outstandingBalanceNgn == (existing().totalAmountNgn - incoming().amountPaidNgn)
                 && incoming().deliveryAuthorized == existing().deliveryAuthorized
                 && incoming().diff(existing()).affectedKeys().hasOnly(['amountPaidNgn', 'outstandingBalanceNgn', 'paymentStatus', 'orderStatus', 'schedule', 'nextPaymentDueDate', 'updatedAt']))
+              ||
+              // Process customer refund request (Accounts Staff or above)
+              (isAccountsOrAbove()
+                && incoming().refundStatus in ['APPROVED', 'REFUNDED', 'DECLINED']
+                && ((incoming().refundStatus == 'REFUNDED' && incoming().orderStatus == 'REFUNDED' && incoming().paymentStatus == 'REFUNDED' && incoming().deliveryAuthorized == false)
+                    || (incoming().refundStatus == 'APPROVED' && incoming().deliveryAuthorized == false)
+                    || (incoming().refundStatus == 'DECLINED' && incoming().deliveryAuthorized == existing().deliveryAuthorized))
+                && incoming().diff(existing()).affectedKeys().hasOnly(['refundStatus', 'refundAmountNgn', 'refundNotes', 'paymentStatus', 'orderStatus', 'deliveryAuthorized', 'updatedAt']))
               ||
               // Schedule delivery & installation ONLY when fully paid (or already overridden)
               (isSalesOrAbove()
@@ -529,6 +597,7 @@ service cloud.firestore {
                         && isValidString(incoming().overrideBy, 3, 160))))
             ))
         );
+      allow delete: if isValidId(orderId) && isSuperAdmin();
     }
 
     // 7. Payments & Receipts
@@ -555,6 +624,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'verifiedBy', 'notes', 'updatedAt']);
+      allow delete: if isValidId(paymentId) && isSuperAdmin();
     }
 
     // 8. Immutable Audit Logs
@@ -614,14 +684,61 @@ service cloud.firestore {
         && incoming().createdAt == request.time;
     }
 
-    // 12. Store & Instalment Settings
+    // 12. Store, Branding & Instalment Settings (Branding Logo/Favicon gated to Super Admin)
     match /settings/{settingId} {
       allow get: if isValidId(settingId);
       allow list: if true;
-      allow create, update: if isValidId(settingId) && isManagerOrAbove()
+      allow create: if isValidId(settingId) && isManagerOrAbove()
         && isValidStoreSetting(incoming())
         && incoming().id == settingId
+        && incoming().updatedAt == request.time
+        && ((!('logoUrl' in incoming()) && !('faviconUrl' in incoming())) || isSuperAdmin());
+      allow update: if isValidId(settingId) && isManagerOrAbove()
+        && isValidStoreSetting(incoming())
+        && incoming().id == existing().id
+        && incoming().updatedAt == request.time
+        && (!incoming().diff(existing()).affectedKeys().hasAny(['logoUrl', 'faviconUrl']) || isSuperAdmin());
+    }
+
+    // 13. Slideshow Banners (Public reads active banners; Super Admin manages CRUD)
+    match /banners/{bannerId} {
+      allow get: if isValidId(bannerId) && (isSuperAdmin() || (resource != null && existing().isActive == true));
+      allow list: if resource.data.isActive == true || isSuperAdmin();
+      allow create: if isValidId(bannerId) && isSuperAdmin()
+        && isValidBanner(incoming())
+        && incoming().id == bannerId
+        && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
+      allow update: if isValidId(bannerId) && isSuperAdmin()
+        && isValidBanner(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(bannerId) && isSuperAdmin();
+    }
+
+    // 14. Customer Refunds
+    match /refunds/{refundId} {
+      allow get: if isValidId(refundId) && isSignedIn() && (isActiveStaff() || (resource != null && existing().userId == request.auth.uid));
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isActiveStaff());
+      allow create: if isValidId(refundId) && isSignedIn()
+        && isValidRefundRequest(incoming())
+        && incoming().id == refundId
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'REQUESTED'
+        && exists(/databases/$(database)/documents/orders/$(incoming().orderId))
+        && get(/databases/$(database)/documents/orders/$(incoming().orderId)).data.userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(refundId) && isAccountsOrAbove()
+        && isValidRefundRequest(incoming())
+        && incoming().id == existing().id
+        && incoming().orderId == existing().orderId
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNotes', 'refundReference', 'processedBy', 'updatedAt']);
+      allow delete: if isValidId(refundId) && isSuperAdmin();
     }
   }
 }

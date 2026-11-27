@@ -60,7 +60,7 @@ const HOME_FAQS = [
 
 export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
   const { isInstaller } = useAuth();
-  const { packages, products, reviews, usingDemoCatalog } = useStore();
+  const { packages, products, reviews } = useStore();
   const { addToCart, setCheckoutMode, setDrawerOpen } = useCart();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -77,18 +77,18 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
   };
 
   return (
-    <div className="bg-white">
+    <div className="bg-white dark:bg-slate-950">
       {/* 1. HERO SECTION */}
-      <section className="border-b border-slate-200 bg-gradient-to-b from-emerald-50/50 via-white to-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 lg:py-20 grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
+      <section className="border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-emerald-50/50 via-white to-white dark:from-emerald-950/30 dark:via-slate-950 dark:to-slate-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-12 lg:py-20 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-center">
-            <p className="text-xs font-bold tracking-widest text-orange-600 uppercase mb-3">
+            <p className="text-xs font-bold tracking-widest text-orange-600 dark:text-orange-400 uppercase mb-3">
               OFFNOT ENERGY · CLEAN ENERGY, STRONGER TOMORROW
             </p>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-[1.12] mb-5 [text-wrap:balance]">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.12] mb-5 [text-wrap:balance]">
               POWER YOUR HOME. PAY AT YOUR CONVENIENCE.
             </h1>
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed mb-8 max-w-xl">
+            <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed mb-8 max-w-xl">
               Get reliable solar energy solutions from OFFNOT ENERGY. Choose your preferred solar
               package, spread your payments over up to five months, and receive your installation
               after completing payment.
@@ -98,7 +98,7 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('packages')}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 transition-colors shadow-xs cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-5 sm:px-6 py-3.5 rounded-lg bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 transition-colors shadow-xs cursor-pointer whitespace-nowrap"
               >
                 EXPLORE SOLAR PACKAGES
                 <ArrowRight className="w-4 h-4" />
@@ -106,23 +106,23 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('shop')}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm font-bold hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-5 sm:px-6 py-3.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer whitespace-nowrap"
               >
                 SHOP PRODUCTS
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-6 border-t border-slate-200 text-xs text-slate-600">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-6 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
               <div>
-                <p className="font-bold text-slate-900 text-sm">Up to 5 Months</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">Up to 5 Months</p>
                 <p>Flexible Instalment Plans</p>
               </div>
               <div>
-                <p className="font-bold text-slate-900 text-sm">Ibadan &amp; Nationwide</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">Ibadan &amp; Nationwide</p>
                 <p>Dugbe &amp; Dalute Branches</p>
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <p className="font-bold text-slate-900 text-sm">Pay-Before-Delivery</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">Pay-Before-Delivery</p>
                 <p>Verified Full Release Policy</p>
               </div>
             </div>
@@ -135,33 +135,25 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
       </section>
 
       {/* 2. FEATURED SOLAR PACKAGES */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-16">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
           <div>
-            <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase mb-1.5">
+            <p className="text-xs font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase mb-1.5">
               Complete Solar Systems · Up to 5 Months Instalment
             </p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
               Featured Solar Packages
             </h2>
           </div>
           <button
             type="button"
             onClick={() => onNavigate('packages')}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 cursor-pointer whitespace-nowrap"
           >
             View All Solar Packages
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
-
-        {usingDemoCatalog && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs sm:text-sm text-amber-900">
-            Showing demonstration catalog data (including the OFFNOT 4KVA Solar Package template).
-            Authorized administrators can edit, replace, or add unlimited packages and products in
-            the Admin Portal.
-          </div>
-        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {featuredPackages.map((pkg) => {
@@ -169,6 +161,7 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
             const calc = calculateInstalmentPlan({
               basePriceNgn: pkg.priceNgn,
               durationMonths: Math.min(5, maxMonths),
+              instalmentSurchargeNgn: pkg.instalmentSurchargeNgn,
               initialDepositPercent: pkg.initialDepositPercent,
               adminChargePercent: pkg.adminChargePercent,
             });
@@ -176,7 +169,7 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
             return (
               <div
                 key={pkg.id}
-                className="group rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col hover:shadow-md transition-shadow"
+                className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col hover:shadow-md transition-shadow"
               >
                 <ProductVisual
                   imageUrl={pkg.imageUrl}
@@ -186,12 +179,12 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
                   className="w-full h-52"
                 />
                 <div className="p-6 flex-1 flex flex-col">
-                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500 mb-2">
-                    <span className="font-semibold text-emerald-700">{pkg.capacityKva} System</span>
+                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">{pkg.capacityKva} System</span>
                     <span>Up to {Math.min(5, maxMonths)} Months</span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2">{pkg.name}</h3>
-                  <ul className="text-xs text-slate-600 space-y-1.5 mb-5">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">{pkg.name}</h3>
+                  <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 mb-3">
                     <li>· Inverter: {pkg.inverterCapacity}</li>
                     <li>
                       · Battery: {pkg.batteryCapacity} ({pkg.batteryTechnology})
@@ -201,21 +194,29 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
                     </li>
                   </ul>
 
-                  <div className="mt-auto pt-4 border-t border-slate-100">
+                  {pkg.loadCapacity && (
+                    <div className="rounded-lg bg-emerald-50/70 dark:bg-emerald-950/35 border border-emerald-200/80 dark:border-emerald-900 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-200 mb-4">
+                      <span className="font-bold">What it can carry: </span>
+                      <span>{pkg.loadCapacity}</span>
+                    </div>
+                  )}
+
+                  <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-baseline justify-between mb-1">
-                      <span className="text-xs text-slate-500">Full Package Price</span>
-                      <span className="text-xl font-extrabold text-slate-900 font-mono-num">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Full Payment Price</span>
+                      <span className="text-xl font-extrabold text-slate-900 dark:text-white font-mono-num">
                         {formatNgn(pkg.priceNgn)}
                       </span>
                     </div>
-                    <p className="text-xs text-orange-700 font-semibold mb-4 font-mono-num">
-                      From {formatNgn(calc.monthlyInstalmentNgn)}/month ({calc.durationMonths} months)
+                    <p className="text-xs text-orange-700 dark:text-orange-400 font-semibold mb-4 font-mono-num">
+                      Instalment: {formatNgn(calc.monthlyInstalmentNgn)}/mo ({calc.durationMonths} mos
+                      {calc.instalmentSurchargeNgn > 0 ? ` · +${formatNgn(calc.instalmentSurchargeNgn)}` : ''})
                     </p>
                     <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
                         onClick={() => onSelectPackage(pkg, 5)}
-                        className="py-2.5 px-3 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer"
+                        className="py-2.5 px-3 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       >
                         View Details
                       </button>
@@ -236,16 +237,16 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
       </section>
 
       {/* 3. HOW IT WORKS (4 SIMPLE STEPS) */}
-      <section className="bg-slate-50 border-y border-slate-200 py-16">
+      <section className="bg-slate-50 dark:bg-slate-900/50 border-y border-slate-200 dark:border-slate-800 py-14 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="max-w-2xl mb-10">
-            <p className="text-xs font-bold tracking-wider text-orange-600 uppercase mb-1.5">
+            <p className="text-xs font-bold tracking-wider text-orange-600 dark:text-orange-400 uppercase mb-1.5">
               Transparent Instalment Process
             </p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-3">
               How OFFNOT ENERGY Instalments Work
             </h2>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               Own a genuine solar power system in four structured steps, with full protection under
               our pay-before-delivery policy.
             </p>
@@ -276,15 +277,15 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
             ].map((item) => (
               <div
                 key={item.step}
-                className="rounded-2xl bg-white border border-slate-200 p-6 flex flex-col"
+                className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 flex flex-col"
               >
-                <span className="text-2xl font-extrabold text-emerald-700 font-mono-num mb-3">
+                <span className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-400 font-mono-num mb-3">
                   {item.step}
                 </span>
-                <h3 className="text-base font-bold text-slate-900 mb-2 leading-snug">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2 leading-snug">
                   {item.title}
                 </h3>
-                <p className="text-sm text-slate-600 leading-relaxed">{item.desc}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -314,20 +315,20 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
       </section>
 
       {/* 4. BEST-SELLING INDIVIDUAL PRODUCTS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-16">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
           <div>
-            <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase mb-1.5">
+            <p className="text-xs font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase mb-1.5">
               Individual Solar Hardware · Full-Payment Checkout
             </p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
               Best-Selling Solar Products
             </h2>
           </div>
           <button
             type="button"
             onClick={() => onNavigate('shop')}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 cursor-pointer whitespace-nowrap"
           >
             Browse All 9 Categories
             <ArrowRight className="w-4 h-4" />
@@ -340,7 +341,7 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
             return (
               <div
                 key={product.id}
-                className="group rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col hover:shadow-md transition-shadow"
+                className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col hover:shadow-md transition-shadow"
               >
                 <ProductVisual
                   imageUrl={product.imageUrl}
@@ -349,23 +350,23 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
                   className="w-full h-44"
                 />
                 <div className="p-5 flex-1 flex flex-col">
-                  <p className="text-xs font-medium text-slate-500 mb-1">{product.category}</p>
-                  <h3 className="text-sm font-bold text-slate-900 mb-1 line-clamp-2">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{product.category}</p>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1 line-clamp-2">
                     {product.name}
                   </h3>
-                  <p className="text-xs text-slate-500 font-mono-num mb-3">Model: {product.model}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono-num mb-3">Model: {product.model}</p>
 
-                  <div className="mt-auto pt-3 border-t border-slate-100">
+                  <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <span className="text-base font-extrabold text-slate-900 font-mono-num">
+                        <span className="text-base font-extrabold text-slate-900 dark:text-white font-mono-num">
                           {displayPrice > 0 ? formatNgn(displayPrice) : 'Set Price in Admin'}
                         </span>
                         {isInstaller && product.priceNgn > displayPrice && (
-                          <p className="text-[11px] font-semibold text-orange-700">Installer Price</p>
+                          <p className="text-[11px] font-semibold text-orange-700 dark:text-orange-400">Installer/Dealer Price</p>
                         )}
                       </div>
-                      <span className="text-[11px] font-medium text-emerald-700">
+                      <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                         {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
                       </span>
                     </div>
@@ -374,7 +375,7 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
                         type="button"
                         disabled={product.stock <= 0 || displayPrice <= 0}
                         onClick={() => addToCart(product, 1)}
-                        className="inline-flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
                         Add
@@ -397,13 +398,13 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
       </section>
 
       {/* 5. WHY CHOOSE OFFNOT ENERGY & OUR SERVICES */}
-      <section className="bg-slate-50 border-y border-slate-200 py-16">
+      <section className="bg-slate-50 dark:bg-slate-900/50 border-y border-slate-200 dark:border-slate-800 py-14 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-12 gap-12">
           <div className="lg:col-span-6">
-            <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase mb-1.5">
+            <p className="text-xs font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase mb-1.5">
               Why Choose OFFNOT ENERGY
             </p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-6">
               Trusted Commercial Solar Partner in Nigeria
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -415,32 +416,32 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
                 { Icon: Clock, title: 'Flexible instalment options', desc: 'Spread solar package payments cleanly over 2 to 5 months.' },
                 { Icon: Users, title: 'Experienced technical team', desc: 'Accurate load sizing and technical consultation before installation.' },
               ].map(({ Icon, title, desc }) => (
-                <div key={title} className="rounded-xl bg-white border border-slate-200 p-4">
-                  <Icon className="w-5 h-5 text-emerald-700 mb-2" />
-                  <h3 className="text-sm font-bold text-slate-900 mb-1">{title}</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">{desc}</p>
+                <div key={title} className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4">
+                  <Icon className="w-5 h-5 text-emerald-700 dark:text-emerald-400 mb-2" />
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">{title}</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{desc}</p>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="lg:col-span-6">
-            <p className="text-xs font-bold tracking-wider text-orange-600 uppercase mb-1.5">
+            <p className="text-xs font-bold tracking-wider text-orange-600 dark:text-orange-400 uppercase mb-1.5">
               Our Services
             </p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-6">
               End-to-End Solar Distribution &amp; Engineering
             </h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6">
+            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6">
               <ul className="space-y-3">
                 {SERVICES_LIST.map((service) => (
-                  <li key={service} className="flex items-start gap-3 text-sm text-slate-700">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <li key={service} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                     <span>{service}</span>
                   </li>
                 ))}
               </ul>
-              <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap gap-3">
+              <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-3">
                 <button
                   type="button"
                   onClick={() => onNavigate('services')}
@@ -451,7 +452,7 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
                 <button
                   type="button"
                   onClick={() => onNavigate('contact')}
-                  className="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   Visit Ibadan Branches
                 </button>
@@ -462,31 +463,31 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
       </section>
 
       {/* 6. VERIFIED CUSTOMER REVIEWS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-16">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
           <div>
-            <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase mb-1.5">
+            <p className="text-xs font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase mb-1.5">
               Customer Feedback
             </p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
               Verified Customer Reviews
             </h2>
           </div>
           <button
             type="button"
             onClick={() => onNavigate('account')}
-            className="text-sm font-semibold text-emerald-700 hover:underline cursor-pointer"
+            className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
           >
             Submit Your Review from My Account
           </button>
         </div>
 
         {reviews.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
-            <p className="text-sm font-semibold text-slate-800 mb-1">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-8 text-center">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">
               No published customer reviews yet
             </p>
-            <p className="text-xs text-slate-600 max-w-lg mx-auto">
+            <p className="text-xs text-slate-600 dark:text-slate-400 max-w-lg mx-auto">
               OFFNOT ENERGY only publishes real, verified customer testimonials submitted by clients
               after purchase and approved by management. Signed-in customers can submit feedback from
               their Customer Dashboard.
@@ -495,15 +496,15 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {reviews.slice(0, 6).map((rev) => (
-              <div key={rev.id} className="rounded-2xl border border-slate-200 bg-white p-6">
+              <div key={rev.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
                 <div className="flex items-center gap-1 text-amber-500 mb-3">
                   {Array.from({ length: Math.min(5, Math.max(1, rev.rating)) }).map((_, idx) => (
                     <Star key={idx} className="w-4 h-4 fill-current" />
                   ))}
                 </div>
-                <p className="text-sm text-slate-700 leading-relaxed mb-4">“{rev.quote}”</p>
-                <div className="text-xs text-slate-500 border-t border-slate-100 pt-3">
-                  <p className="font-bold text-slate-900">{rev.customerName}</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-4">“{rev.quote}”</p>
+                <div className="text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
+                  <p className="font-bold text-slate-900 dark:text-slate-100">{rev.customerName}</p>
                   <p>
                     {rev.location} · {rev.packageOrProduct}
                   </p>
@@ -515,22 +516,22 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
       </section>
 
       {/* 7. FAQ & IBADAN BRANCH LOCATOR MAP */}
-      <section className="bg-slate-50 border-t border-slate-200 py-16">
+      <section className="bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 py-14 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-14">
           <div>
-            <div className="flex items-end justify-between gap-4 mb-6">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
               <div>
-                <p className="text-xs font-bold tracking-wider text-orange-600 uppercase mb-1.5">
+                <p className="text-xs font-bold tracking-wider text-orange-600 dark:text-orange-400 uppercase mb-1.5">
                   Answers &amp; Policies
                 </p>
-                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
                   Frequently Asked Questions
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => onNavigate('policies', 'faq')}
-                className="text-sm font-semibold text-emerald-700 hover:underline cursor-pointer"
+                className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
               >
                 All Policies &amp; Terms
               </button>
@@ -542,22 +543,22 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
                 return (
                   <div
                     key={faq.q}
-                    className="rounded-xl border border-slate-200 bg-white overflow-hidden"
+                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden"
                   >
                     <button
                       type="button"
                       onClick={() => setOpenFaq(isOpen ? null : idx)}
                       className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 cursor-pointer"
                     >
-                      <span className="text-sm font-bold text-slate-900">{faq.q}</span>
+                      <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{faq.q}</span>
                       {isOpen ? (
-                        <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+                        <ChevronUp className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
                       ) : (
-                        <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                        <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
                       )}
                     </button>
                     {isOpen && (
-                      <div className="px-5 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                      <div className="px-5 pb-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800 pt-3">
                         {faq.a}
                       </div>
                     )}
@@ -569,10 +570,10 @@ export function HomePage({ onNavigate, onSelectPackage }: HomePageProps) {
 
           <div>
             <div className="mb-6">
-              <p className="text-xs font-bold tracking-wider text-emerald-700 uppercase mb-1.5">
+              <p className="text-xs font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase mb-1.5">
                 Visit Our Offices
               </p>
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
                 OFFNOT ENERGY Ibadan Branches
               </h2>
             </div>

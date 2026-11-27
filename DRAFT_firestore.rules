@@ -70,12 +70,13 @@ service cloud.firestore {
     // --- Validation Blueprints ---
     function isValidUserProfile(data) {
       return data.keys().hasAll(['uid', 'displayName', 'email', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'displayName', 'email', 'phone', 'accountType', 'defaultAddress', 'defaultCity', 'defaultState', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'phone', 'accountType', 'installerNetworkJoined', 'defaultAddress', 'defaultCity', 'defaultState', 'createdAt', 'updatedAt'])
         && isValidId(data.uid)
         && isValidString(data.displayName, 1, 120)
         && isValidString(data.email, 3, 160)
         && (!('phone' in data) || isValidString(data.phone, 0, 32))
         && (!('accountType' in data) || data.accountType in ['installer', 'end_user'])
+        && (!('installerNetworkJoined' in data) || data.installerNetworkJoined is bool)
         && (!('defaultAddress' in data) || isValidString(data.defaultAddress, 0, 300))
         && (!('defaultCity' in data) || isValidString(data.defaultCity, 0, 100))
         && (!('defaultState' in data) || isValidString(data.defaultState, 0, 80))
@@ -344,7 +345,7 @@ service cloud.firestore {
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'accountType', 'defaultAddress', 'defaultCity', 'defaultState', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'accountType', 'installerNetworkJoined', 'defaultAddress', 'defaultCity', 'defaultState', 'updatedAt']);
       allow delete: if isValidId(userId) && isSuperAdmin() && request.auth.uid != userId;
 
       match /addresses/{addressId} {

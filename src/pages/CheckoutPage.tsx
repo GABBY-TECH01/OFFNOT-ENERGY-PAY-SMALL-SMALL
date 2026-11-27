@@ -71,10 +71,10 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
   if (!user) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 space-y-4">
-          <Lock className="w-10 h-10 text-emerald-700 mx-auto" />
-          <h1 className="text-xl font-bold text-slate-900">Sign In Required to Checkout</h1>
-          <p className="text-sm text-slate-600">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 space-y-4">
+          <Lock className="w-10 h-10 text-emerald-700 dark:text-emerald-400 mx-auto" />
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white">Sign In Required to Checkout</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
             Please sign in or register an OFFNOT ENERGY account so we can securely link your order,
             instalment schedule, payment receipts, and delivery address.
           </p>
@@ -95,9 +95,9 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
   if (!isPackageMode && items.length === 0) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 space-y-4">
-          <h1 className="text-xl font-bold text-slate-900">No Active Checkout Items</h1>
-          <p className="text-sm text-slate-600">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 space-y-4">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white">No Active Checkout Items</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
             Add individual solar products to your cart or choose a complete solar package first.
           </p>
           <div className="flex gap-3 justify-center">
@@ -111,7 +111,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
             <button
               type="button"
               onClick={() => onNavigate('packages')}
-              className="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold cursor-pointer"
+              className="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold cursor-pointer"
             >
               Solar Packages
             </button>
@@ -126,6 +126,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
     ? calculateInstalmentPlan({
         basePriceNgn: packageSelection.pkg.priceNgn,
         durationMonths: packageSelection.durationMonths,
+        instalmentSurchargeNgn: packageSelection.pkg.instalmentSurchargeNgn,
         initialDepositPercent:
           packageSelection.pkg.initialDepositPercent ?? storeSettings.defaultInitialDepositPercent,
         adminChargePercent:
@@ -383,6 +384,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
         subtotalNgn: Math.round(isPackageMode ? packageSelection!.pkg.priceNgn : subtotalNgn),
         deliveryFeeNgn: Math.round(deliveryFeeNgn),
         installationFeeNgn: Math.round(installationFeeNgn),
+        instalmentSurchargeNgn: Math.round(isPackageMode ? pkgCalc!.instalmentSurchargeNgn : 0),
         adminChargeNgn: Math.round(isPackageMode ? pkgCalc!.adminChargeNgn : 0),
         totalAmountNgn: roundedTotal,
         amountPaidNgn: 0,
@@ -431,24 +433,24 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-      <div className="flex items-center justify-between gap-4 mb-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <button
           type="button"
           onClick={() => onNavigate(isPackageMode ? 'packages' : 'shop')}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-emerald-700 cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to {isPackageMode ? 'Solar Packages' : 'Product Store'}
         </button>
 
         {items.length > 0 && packageSelection && (
-          <div className="inline-flex rounded-lg bg-slate-100 p-1 text-xs font-semibold">
+          <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-1 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setCheckoutMode('cart')}
               className={`px-3 py-1.5 rounded-md cursor-pointer ${
-                !isPackageMode ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+                !isPackageMode ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Product Cart ({items.length})
@@ -457,7 +459,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
               type="button"
               onClick={() => setCheckoutMode('package')}
               className={`px-3 py-1.5 rounded-md cursor-pointer ${
-                isPackageMode ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+                isPackageMode ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Solar Package Plan
@@ -466,14 +468,14 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
         )}
       </div>
 
-      <h1 className="text-3xl font-extrabold text-slate-900 mb-2">
+      <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mb-2">
         {isInstalmentPackage
           ? 'Solar Package Instalment Application'
           : isPackageMode
             ? 'Solar Package Full-Payment Checkout'
             : 'Individual Solar Products Checkout'}
       </h1>
-      <p className="text-sm text-slate-600 mb-8">
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-8">
         {isInstalmentPackage
           ? 'Separated Instalment Workflow: Submit your application for management approval before making monthly payments.'
           : 'Standard Full-Payment Checkout: Complete full payment via online gateway or verified bank transfer.'}
@@ -481,13 +483,13 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
 
       <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left: Customer & Delivery Form */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-            <h2 className="text-base font-bold text-slate-900">1. Customer &amp; Delivery Details</h2>
+        <div className="lg:col-span-7 space-y-6 min-w-0">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">1. Customer &amp; Delivery Details</h2>
 
             {savedAddresses.length > 0 && (
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                   Use a Saved Delivery Address
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -500,7 +502,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
                         setCustomerPhone(addr.phone);
                         setDeliveryAddress(`${addr.streetAddress}, ${addr.city}, ${addr.state}`);
                       }}
-                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium hover:border-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 hover:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
                     >
                       {addr.label}: {addr.city}
                     </button>
@@ -511,31 +513,31 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
                 <input
                   required
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100"
                   placeholder="Recipient full name"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Phone Number (WhatsApp / Call)
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  WhatsApp / Phone Number
                 </label>
                 <input
                   required
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100"
                   placeholder="e.g. 0803..."
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Delivery &amp; Installation Street Address
               </label>
               <AddressAutocomplete
@@ -546,13 +548,13 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Coordinating OFFNOT Branch
                 </label>
                 <select
                   value={deliveryBranch}
                   onChange={(e) => setDeliveryBranch(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm bg-white"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                 >
                   <option value="Dugbe Branch">Dugbe Branch (Iyaganku Road, Ibadan)</option>
                   <option value="Dalute Branch">Dalute Branch (Tipper Garage, Ibadan)</option>
@@ -561,13 +563,13 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
 
               {!isPackageMode && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Delivery Zone
                   </label>
                   <select
                     value={selectedZoneIdx}
                     onChange={(e) => setSelectedZoneIdx(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm bg-white"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                   >
                     {DELIVERY_ZONES.map((z, idx) => (
                       <option key={z.label} value={idx}>
@@ -580,7 +582,7 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
             </div>
 
             {!isPackageMode && (
-              <label className="flex items-center gap-2.5 pt-2 text-sm text-slate-700 cursor-pointer">
+              <label className="flex items-center gap-2.5 pt-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={includeInstallation}
@@ -595,13 +597,13 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
           </div>
 
           {/* Payment Method Selection */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
-            <h2 className="text-base font-bold text-slate-900">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
               2. {isInstalmentPackage ? 'Application & Repayment Terms' : 'Select Payment Method'}
             </h2>
 
             {isInstalmentPackage ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs sm:text-sm text-emerald-950 space-y-2">
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 p-4 text-xs sm:text-sm text-emerald-950 dark:text-emerald-100 space-y-2">
                 <p className="font-bold">Management Approval Gate</p>
                 <p>
                   No upfront payment is charged before approval. Submitting this form registers your{' '}
@@ -638,8 +640,8 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
                     key={opt.id}
                     className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer ${
                       paymentMethod === opt.id
-                        ? 'border-emerald-700 bg-emerald-50/50'
-                        : 'border-slate-200 hover:bg-slate-50'
+                        ? 'border-emerald-700 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/35'
+                        : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40'
                     }`}
                   >
                     <input
@@ -650,32 +652,32 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
                       className="mt-1 accent-emerald-700"
                     />
                     <div>
-                      <p className="text-sm font-bold text-slate-900">{opt.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{opt.subtitle}</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{opt.title}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{opt.subtitle}</p>
                     </div>
                   </label>
                 ))}
 
                 {paymentMethod === 'bank_transfer' && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-xs">
-                    <div className="flex items-center gap-2 font-bold text-slate-900">
-                      <Building2 className="w-4 h-4 text-emerald-700" />
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-4 space-y-3 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+                      <Building2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                       OFFNOT ENERGY Bank Details
                     </div>
-                    <p className="text-slate-700">
+                    <p className="text-slate-700 dark:text-slate-300">
                       Bank: <strong>{storeSettings.bankName}</strong> · Account Name:{' '}
                       <strong>{storeSettings.bankAccountName}</strong> · Account Number:{' '}
                       <strong className="font-mono-num">{storeSettings.bankAccountNumber}</strong>
                     </p>
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                         Bank Transfer Reference / Sender Name
                       </label>
                       <input
                         value={transferReference}
                         onChange={(e) => setTransferReference(e.target.value)}
                         placeholder="e.g. NIP-8493021 / Sender Name"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100"
                       />
                     </div>
                   </div>
@@ -684,12 +686,12 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
             )}
 
             {/* Strict Policy Confirmation */}
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-orange-950">
-                <Lock className="w-4 h-4 text-orange-700" />
+            <div className="rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/40 p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-orange-950 dark:text-orange-200">
+                <Lock className="w-4 h-4 text-orange-700 dark:text-orange-400" />
                 STRICT POLICY: PAY FULLY BEFORE DELIVERY AND INSTALLATION
               </div>
-              <label className="flex items-start gap-2.5 text-xs text-orange-950 cursor-pointer">
+              <label className="flex items-start gap-2.5 text-xs text-orange-950 dark:text-orange-200 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={acceptedPolicy}
@@ -706,59 +708,72 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
           </div>
 
           {gatewayMessage && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 flex items-start gap-2.5 text-xs text-amber-950">
-              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-4 flex items-start gap-2.5 text-xs text-amber-950 dark:text-amber-200">
+              <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
               <span>{gatewayMessage}</span>
             </div>
           )}
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">
+            <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 p-4 text-xs text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
         </div>
 
         {/* Right: Order Review Summary */}
-        <div className="lg:col-span-5 lg:sticky lg:top-24">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 shadow-xs">
-            <h2 className="text-base font-bold text-slate-900">Order Review</h2>
+        <div className="lg:col-span-5 lg:sticky lg:top-24 min-w-0">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-5 shadow-xs">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Order Review</h2>
 
             {isPackageMode && packageSelection && pkgCalc ? (
               <div className="space-y-3 text-sm">
-                <div className="pb-3 border-b border-slate-100">
-                  <p className="font-bold text-slate-900">{packageSelection.pkg.name}</p>
-                  <p className="text-xs text-slate-500">
+                <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <p className="font-bold text-slate-900 dark:text-white">{packageSelection.pkg.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {packageSelection.pkg.capacityKva} ·{' '}
                     {packageSelection.durationMonths === 1
                       ? 'Full Payment'
                       : `${packageSelection.durationMonths}-Month Instalment Plan`}
                   </p>
+                  {packageSelection.pkg.loadCapacity && (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1.5">
+                      Carries: {packageSelection.pkg.loadCapacity}
+                    </p>
+                  )}
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600">Package Price</span>
-                  <span className="font-mono-num font-semibold">
+                  <span className="text-slate-600 dark:text-slate-400">Package Base Price</span>
+                  <span className="font-mono-num font-semibold text-slate-900 dark:text-slate-100">
                     {formatNgn(pkgCalc.basePriceNgn)}
                   </span>
                 </div>
+                {pkgCalc.instalmentSurchargeNgn > 0 && (
+                  <div className="flex justify-between text-orange-700 dark:text-orange-400">
+                    <span>Instalment Plan Fee</span>
+                    <span className="font-mono-num font-semibold">
+                      +{formatNgn(pkgCalc.instalmentSurchargeNgn)}
+                    </span>
+                  </div>
+                )}
                 {pkgCalc.adminChargeNgn > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Admin Charge</span>
-                    <span className="font-mono-num">{formatNgn(pkgCalc.adminChargeNgn)}</span>
+                    <span className="text-slate-600 dark:text-slate-400">Admin Charge</span>
+                    <span className="font-mono-num text-slate-900 dark:text-slate-100">{formatNgn(pkgCalc.adminChargeNgn)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-slate-600">Installation (Upon Full Pay)</span>
-                  <span className="text-emerald-700 font-semibold">Included</span>
+                  <span className="text-slate-600 dark:text-slate-400">Installation (Upon Full Pay)</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Included</span>
                 </div>
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="font-bold text-slate-900">Total Package Amount</span>
-                  <span className="text-xl font-extrabold font-mono-num text-emerald-800">
+                <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-3">
+                  <span className="font-bold text-slate-900 dark:text-white">Total Package Amount</span>
+                  <span className="text-xl font-extrabold font-mono-num text-emerald-800 dark:text-emerald-400">
                     {formatNgn(totalAmountNgn)}
                   </span>
                 </div>
                 {isInstalmentPackage && (
-                  <div className="flex justify-between text-xs text-orange-700 font-semibold">
+                  <div className="flex justify-between text-xs text-orange-700 dark:text-orange-400 font-semibold">
                     <span>Monthly Instalment ({packageSelection.durationMonths} mos)</span>
                     <span className="font-mono-num">{formatNgn(pkgCalc.monthlyInstalmentNgn)}/mo</span>
                   </div>
@@ -766,44 +781,44 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
               </div>
             ) : (
               <div className="space-y-3 text-sm">
-                <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-60 overflow-y-auto">
                   {items.map(({ product, quantity }) => {
                     const unitPrice = getEffectiveProductPrice(product, isInstaller);
                     return (
                       <div key={product.id} className="py-2.5 flex justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-slate-900">{product.name}</p>
-                          <p className="text-xs text-slate-500 font-mono-num">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{product.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-mono-num">
                             Qty {quantity} × {formatNgn(unitPrice)}
                             {isInstaller ? ' (Installer)' : ''}
                           </p>
                         </div>
-                        <span className="font-bold font-mono-num text-slate-900">
+                        <span className="font-bold font-mono-num text-slate-900 dark:text-slate-100 shrink-0">
                           {formatNgn(unitPrice * quantity)}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-                <div className="pt-3 border-t border-slate-100 space-y-1.5">
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Subtotal</span>
-                    <span className="font-mono-num">{formatNgn(subtotalNgn)}</span>
+                    <span className="text-slate-600 dark:text-slate-400">Subtotal</span>
+                    <span className="font-mono-num text-slate-900 dark:text-slate-100">{formatNgn(subtotalNgn)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Delivery Charge</span>
-                    <span className="font-mono-num">{formatNgn(deliveryFeeNgn)}</span>
+                    <span className="text-slate-600 dark:text-slate-400">Delivery Charge</span>
+                    <span className="font-mono-num text-slate-900 dark:text-slate-100">{formatNgn(deliveryFeeNgn)}</span>
                   </div>
                   {installationFeeNgn > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Installation Support</span>
-                      <span className="font-mono-num">{formatNgn(installationFeeNgn)}</span>
+                      <span className="text-slate-600 dark:text-slate-400">Installation Support</span>
+                      <span className="font-mono-num text-slate-900 dark:text-slate-100">{formatNgn(installationFeeNgn)}</span>
                     </div>
                   )}
                 </div>
-                <div className="flex justify-between border-t border-slate-200 pt-3">
-                  <span className="font-bold text-slate-900">Total Payable</span>
-                  <span className="text-xl font-extrabold font-mono-num text-emerald-800">
+                <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-3">
+                  <span className="font-bold text-slate-900 dark:text-white">Total Payable</span>
+                  <span className="text-xl font-extrabold font-mono-num text-emerald-800 dark:text-emerald-400">
                     {formatNgn(totalAmountNgn)}
                   </span>
                 </div>
@@ -828,8 +843,8 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
               )}
             </button>
 
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
               <span>Unique transaction reference &amp; official receipt issued on verification.</span>
             </div>
           </div>
